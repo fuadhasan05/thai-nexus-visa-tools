@@ -1,7 +1,7 @@
 import React from 'react';
 import GlassCard from '@/components/GlassCard';
 import { FileText, Shield, AlertCircle, CheckCircle, XCircle, DollarSign } from 'lucide-react';
-import SEOHead from '../../components/SEOHead';
+import SEOHead from '/@components/SEOHead';
 
 export default function TermsOfService() {
   return (
