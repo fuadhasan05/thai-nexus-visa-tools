@@ -5,7 +5,7 @@ import GlassCard from './GlassCard';
 
 export default function ContactCTA({ message = "Complicated Visa Situation?" }) {
   return (
-    <GlassCard className="p-6 md:p-8 bg-gradient-to-br from-[#BF1E2E] to-[#d94656] border-none text-white shadow-lg mb-[10px]" hover={false}>
+    <GlassCard className="p-6 md:p-8 bg-linear-to-br from-[#BF1E2E] to-[#d94656] border-none text-white shadow-lg mb-\[10px\]" hover={false}>
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-6">
           <h3 className="text-xl md:text-2xl font-bold mb-2">{message}</h3>

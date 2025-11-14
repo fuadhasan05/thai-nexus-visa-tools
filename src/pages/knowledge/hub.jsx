@@ -485,13 +485,13 @@ export default function KnowledgeHub() {
           <div className="max-w-2xl mx-auto">
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Search className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
+                <Search className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 text-black w-4 h-4 md:w-5 md:h-5" />
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                   placeholder="Ask any visa question..."
-                  className="pl-10 md:pl-12 h-14 md:h-16 text-base md:text-lg border border-white/30 bg-white/95 backdrop-blur-sm"
+                  className="pl-10 md:pl-12 h-14 md:h-16 text-lg md:text-md border border-white/30 bg-white/95 backdrop-blur-sm placeholder:text-gray-400 "
                 />
               </div>
               <Button

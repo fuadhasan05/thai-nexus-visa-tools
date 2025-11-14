@@ -727,7 +727,7 @@ export default function VisaNavigator() {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#272262] via-[#3d3680] to-[#272262] p-10 text-center">
+      <div className="relative overflow-hidden rounded-3xl bg-linear-to-br from-[#272262] via-[#3d3680] to-[#272262] p-10 text-center">
         <div className="absolute inset-0 opacity-10" style={{
           backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px)',
           backgroundSize: '50px 50px'
@@ -777,7 +777,7 @@ export default function VisaNavigator() {
                 value={formData.goal}
                 onValueChange={(val) => setFormData({ ...formData, goal: val })}
                 placeholder={content.step1.goal_placeholder}
-                className="h-14 text-lg border placeholder:text-gray-400"
+                className="h-14 text-lg"
                 excludePermitsReports={true}
               />
             </div>
