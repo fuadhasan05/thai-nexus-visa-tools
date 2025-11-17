@@ -46,7 +46,7 @@ import FeedbackButton from "./FeedbackButton";
 import { TranslationProvider, useTranslation } from "./TranslationProvider";
 import { ErrorProvider } from './ErrorNotification';
 import { ConfirmProvider } from './ConfirmDialog';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 
 import SEOHead from './SEOHead';
@@ -115,6 +115,16 @@ function LayoutContent({ children, currentPageName }) {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [router.pathname]);
 
+  // If this is the auth page (login or signup), render a minimal layout without header/footer
+  const authPaths = ['/login', '/signup'];
+  if (authPaths.includes(router.pathname)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md">{children}</div>
+      </div>
+    );
+  }
+
   // Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -144,6 +154,8 @@ function LayoutContent({ children, currentPageName }) {
     cacheTime: 10 * 60 * 1000,
     retry: false,
   });
+
+  const queryClient = useQueryClient();
 
   const { data: credits } = useQuery({
     queryKey: ['user-credits', currentUser?.email],
@@ -490,7 +502,17 @@ function LayoutContent({ children, currentPageName }) {
                       </>
                     )}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => supabase.auth.signOut()} className="cursor-pointer text-red-600">
+                    <DropdownMenuItem onClick={async () => {
+                      try {
+                        await supabase.auth.signOut();
+                        // Clear cached user data and refetch
+                        queryClient.invalidateQueries({ queryKey: ['current-user'] });
+                        // Optionally navigate to home
+                        router.push('/');
+                      } catch (err) {
+                        console.error('Sign out error:', err);
+                      }
+                    }} className="cursor-pointer text-red-600">
                       <LogOut className="w-4 h-4 mr-2" />
                       Logout
                     </DropdownMenuItem>
@@ -498,7 +520,10 @@ function LayoutContent({ children, currentPageName }) {
                 </DropdownMenu>
               ) : (
                 <Button
-                  onClick={() => { if (typeof window !== 'undefined') supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.router.pathname } }); }}
+                  onClick={() => {
+                    // Navigate to the dedicated login page which shows the email/password form
+                    router.push('/login');
+                  }}
                   size="sm"
                   className="bg-[#BF1E2E] hover:bg-[#9d1825] text-white"
                 >
@@ -632,9 +657,16 @@ function LayoutContent({ children, currentPageName }) {
                     )}
                     
                     <button
-                      onClick={() => {
-                        supabase.auth.signOut();
-                        setMobileMenuOpen(false);
+                      onClick={async () => {
+                        try {
+                          await supabase.auth.signOut();
+                          queryClient.invalidateQueries({ queryKey: ['current-user'] });
+                          router.push('/');
+                        } catch (err) {
+                          console.error('Sign out error:', err);
+                        } finally {
+                          setMobileMenuOpen(false);
+                        }
                       }}
                       className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 text-red-600 touch-manipulation"
                     >
@@ -647,9 +679,10 @@ function LayoutContent({ children, currentPageName }) {
                 {!currentUser && (
                   <button
                       onClick={() => {
-                        if (typeof window !== 'undefined') supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.router.pathname } });
-                        setMobileMenuOpen(false);
-                      }}
+                            // Navigate to the dedicated login page (mobile)
+                            router.push('/login');
+                            setMobileMenuOpen(false);
+                          }}
                       className="w-full text-left px-4 py-3 rounded-lg flex items-center justify-center gap-3 bg-blue-600 text-white hover:bg-blue-700 transition-colors touch-manipulation"
                     >
                       <User className="w-5 h-5 flex-shrink-0" />
@@ -824,7 +857,7 @@ export default function Layout({ children, currentPageName }) {
     <ErrorProvider>
       <ConfirmProvider>
         <TranslationProvider>
-          <LayoutContent children={children} currentPageName={currentPageName} />
+          <LayoutContent currentPageName={currentPageName}>{children}</LayoutContent>
         </TranslationProvider>
       </ConfirmProvider>
     </ErrorProvider>

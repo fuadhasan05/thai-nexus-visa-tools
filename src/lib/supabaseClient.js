@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY || '';
+// Accept the common anon key env name (NEXT_PUBLIC_SUPABASE_ANON_KEY) or the older NEXT_PUBLIC_SUPABASE_KEY
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_KEY || '';
 
 // Check if credentials are valid (not placeholder values and proper format)
 const isValidUrl = supabaseUrl && supabaseUrl.startsWith('https://') && supabaseUrl.includes('supabase.co');
