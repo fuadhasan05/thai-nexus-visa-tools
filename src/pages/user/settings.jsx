@@ -419,7 +419,7 @@ export default function Settings() {
                         onClick={() => document.getElementById('avatar-upload').click()}
                         disabled={uploadingImage}
                         size="sm"
-                        className="border-[#E7E7E7] hover:bg-[#F8F9FA]"
+                        className="border-[#E7E7E7] hover:bg-[#F8F9FA] text-black"
                       >
                         {uploadingImage ? (
                           <>
