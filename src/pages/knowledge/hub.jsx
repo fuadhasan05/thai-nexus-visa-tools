@@ -20,6 +20,8 @@ export default function KnowledgeHub() {
   const [currentPage, setCurrentPage] = useState(1);
   const [aiSearchResults, setAiSearchResults] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
+  const [showWriteModal, setShowWriteModal] = useState(false);
+  const [blogFormData, setBlogFormData] = useState({ title: '', excerpt: '', content: '', category_id: '', tags: '', difficulty_level: 'Beginner' });
   const postsPerPage = 10;
 
   const queryClient = useQueryClient();
@@ -186,6 +188,64 @@ export default function KnowledgeHub() {
     onSuccess: (data) => {
       setAiSearchResults(data.results || []);
       setCurrentPage(1);
+    }
+  });
+
+  // Create blog post mutation
+  const createBlogMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentUser?.email) throw new Error('Must be logged in');
+      if (!blogFormData.title.trim() || !blogFormData.excerpt.trim() || !blogFormData.content.trim()) {
+        throw new Error('Title, excerpt, and content are required');
+      }
+      if (!blogFormData.category_id) throw new Error('Category is required');
+
+      const tagsArray = blogFormData.tags
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0);
+
+      const slug = blogFormData.title
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .substring(0, 100) + '-' + Date.now();
+
+      const { data, error } = await supabase.from('knowledge').insert([
+        {
+          title: blogFormData.title,
+          excerpt: blogFormData.excerpt,
+          summary: blogFormData.excerpt,
+          content: blogFormData.content,
+          slug: slug,
+          category_id: blogFormData.category_id,
+          tags: tagsArray,
+          author_email: currentUser.email,
+          author_name: userProfile?.full_name || currentUser.email.split('@')[0],
+          difficulty_level: blogFormData.difficulty_level,
+          published: true,
+          published_at: new Date().toISOString(),
+          view_count: 0,
+          upvote_count: 0,
+          comment_count: 0,
+          has_accepted_answer: false,
+          featured: false
+        }
+      ]).select().single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['knowledge-all-posts'] });
+      queryClient.invalidateQueries({ queryKey: ['knowledge-popular'] });
+      queryClient.invalidateQueries({ queryKey: ['trending-posts'] });
+      setShowWriteModal(false);
+      setBlogFormData({ title: '', excerpt: '', content: '', category_id: '', tags: '', difficulty_level: 'Beginner' });
+      alert('Blog post created successfully!');
+    },
+    onError: (error) => {
+      alert('Error creating blog: ' + error.message);
     }
   });
 
@@ -531,7 +591,15 @@ export default function KnowledgeHub() {
                 </Button>
               </Link>
             )}
-            {!canContribute && (
+            {!currentUser && (
+              <Link href={createPageUrl("login")}>
+                <Button className="bg-white hover:bg-white/90 text-[#272262] font-bold shadow-xl">
+                  <Users className="w-5 h-5 mr-2" />
+                  Sign In to Write
+                </Button>
+              </Link>
+            )}
+            {currentUser && !canContribute && (
               <Link href={createPageUrl("BecomeContributor")}>
                 <Button className="bg-white hover:bg-white/90 text-[#272262] font-bold shadow-xl">
                   <Users className="w-5 h-5 mr-2" />
@@ -540,6 +608,119 @@ export default function KnowledgeHub() {
               </Link>
             )}
           </div>
+
+          {/* Write Blog Modal */}
+          {showWriteModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <GlassCard className="w-full max-w-2xl max-h-[90vh] flex flex-col bg-white border border-[#E7E7E7] rounded-2xl">
+                <div className="p-6 md:p-8 border-b border-[#E7E7E7]">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-3xl font-bold text-[#272262]">Write a Blog Post</h2>
+                    <button
+                      onClick={() => setShowWriteModal(false)}
+                      className="text-[#454545] hover:text-[#272262] text-2xl"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-y-auto flex-1 p-6 md:p-8">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-bold text-[#272262] mb-2">Title *</label>
+                      <Input
+                        value={blogFormData.title}
+                        onChange={(e) => setBlogFormData({ ...blogFormData, title: e.target.value })}
+                        placeholder="Your blog post title"
+                        className="border-[#E7E7E7]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-[#272262] mb-2">Excerpt *</label>
+                      <Input
+                        value={blogFormData.excerpt}
+                        onChange={(e) => setBlogFormData({ ...blogFormData, excerpt: e.target.value })}
+                        placeholder="Brief summary (50-100 words)"
+                        className="border-[#E7E7E7]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-[#272262] mb-2">Category *</label>
+                      <Select value={blogFormData.category_id} onValueChange={(val) => setBlogFormData({ ...blogFormData, category_id: val })}>
+                        <SelectTrigger className="border-[#E7E7E7]">
+                          <SelectValue placeholder="Select a category">
+                            {blogFormData.category_id ? categories.find(cat => cat.id === blogFormData.category_id)?.name : 'Select a category'}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="z-51">
+                          {categories.map(cat => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-[#272262] mb-2">Difficulty Level</label>
+                      <Select value={blogFormData.difficulty_level} onValueChange={(val) => setBlogFormData({ ...blogFormData, difficulty_level: val })}>
+                        <SelectTrigger className="border-[#E7E7E7]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Beginner">Beginner</SelectItem>
+                          <SelectItem value="Intermediate">Intermediate</SelectItem>
+                          <SelectItem value="Advanced">Advanced</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-[#272262] mb-2">Content *</label>
+                      <textarea
+                        value={blogFormData.content}
+                        onChange={(e) => setBlogFormData({ ...blogFormData, content: e.target.value })}
+                        placeholder="Your detailed blog content..."
+                        rows={8}
+                        className="w-full p-3 border border-[#E7E7E7] rounded-lg focus:outline-none focus:border-[#272262]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-[#272262] mb-2">Tags</label>
+                      <Input
+                        value={blogFormData.tags}
+                        onChange={(e) => setBlogFormData({ ...blogFormData, tags: e.target.value })}
+                        placeholder="Separate tags with commas (e.g., visa, retirement, visa-application)"
+                        className="border-[#E7E7E7]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 p-6 md:p-8 border-t border-[#E7E7E7]">
+                  <Button
+                    onClick={() => createBlogMutation.mutate()}
+                    disabled={createBlogMutation.isPending}
+                    className="flex-1 bg-[#272262] hover:bg-[#3d3680] text-white font-bold py-3"
+                  >
+                    {createBlogMutation.isPending ? 'Publishing...' : 'Publish Blog'}
+                  </Button>
+                  <Button
+                    onClick={() => setShowWriteModal(false)}
+                    variant="outline"
+                    className="flex-1 border-[#E7E7E7] text-[#272262] font-bold py-3"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </GlassCard>
+            </div>
+          )}
         </div>
       </div>
 
