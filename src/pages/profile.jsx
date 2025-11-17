@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +15,7 @@ import { format } from 'date-fns';
 export default function Profile() {
   const [topupAmount, setTopupAmount] = useState(50);
   const [isProcessing, setIsProcessing] = useState(false);
-  const queryClient = useQueryClient();
+  // queryClient will be defined after hooks
 
   // Utility function for creating page URLs
   const createPageUrl = (pageName) => {
@@ -21,20 +23,10 @@ export default function Profile() {
     return `/${pageName.toLowerCase()}`;
   };
 
-  // ALWAYS call ALL hooks at the top level - never conditionally
-  const { data: user, isLoading: userLoading } = useQuery({
-    queryKey: ['current-user-profile'],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error) return null;
-        return data?.user ?? null;
-      } catch (error) {
-        return null;
-      }
-    },
-    retry: false
-  });
+  // Use centralized auth hook for user state
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { user, loading: authLoading, signOut } = useAuth();
 
   const { data: credits } = useQuery({
     queryKey: ['user-credits-profile', user?.email],
@@ -164,17 +156,25 @@ export default function Profile() {
     }
   };
 
-  const handleLogout = () => {
-    supabase.auth.signOut();
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      queryClient.invalidateQueries({ queryKey: ['current-user'] });
+      queryClient.invalidateQueries({ queryKey: ['user-credits-profile'] });
+      queryClient.invalidateQueries({ queryKey: ['user-reputation'] });
+      queryClient.invalidateQueries({ queryKey: ['contributor-profile-detail'] });
+      router.replace('/');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
   };
 
   const handleLogin = () => {
     supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname } });
   };
 
-  // Calculate vote weight based on reputation
-  const getVoteWeight = () => {
-    const points = reputation?.reputation_points || 0;
+  // Calculate vote weight based on reputation points (accepts points param)
+  const getVoteWeight = (points = 0) => {
     if (points <= 50) return 0.5;
     if (points <= 100) return 0.75;
     if (points <= 500) return 1.0;
@@ -182,8 +182,7 @@ export default function Profile() {
     return 2.0;
   };
 
-  const getReputationTier = () => {
-    const points = reputation?.reputation_points || 0;
+  const getReputationTier = (points = 0) => {
     if (points <= 50) return { name: 'Novice', color: 'text-gray-600', bg: 'bg-gray-100', border: 'border-gray-200' };
     if (points <= 100) return { name: 'Contributor', color: 'text-blue-600', bg: 'bg-blue-100', border: 'border-blue-200' };
     if (points <= 500) return { name: 'Regular', color: 'text-green-600', bg: 'bg-green-100', border: 'border-green-200' };
@@ -192,7 +191,7 @@ export default function Profile() {
   };
 
   // NOW do conditional renders AFTER all hooks
-  if (userLoading) {
+  if (authLoading) {
     return (
       <div className="max-w-4xl mx-auto p-8 text-center">
         <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto" />
@@ -215,8 +214,18 @@ export default function Profile() {
     );
   }
 
-  const tier = getReputationTier();
-  const voteWeight = getVoteWeight();
+  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || (user?.email ? user.email.split('@')[0] : 'User');
+
+  const rep = reputation ?? {
+    reputation_points: 0,
+    accepted_answers_count: 0,
+    helpful_answers_count: 0,
+    questions_asked: 0,
+    answers_given: 0,
+  };
+
+  const tier = getReputationTier(rep.reputation_points);
+  const voteWeight = getVoteWeight(rep.reputation_points);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -224,7 +233,7 @@ export default function Profile() {
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#272262] to-[#3d3680] flex items-center justify-center mx-auto mb-4">
           <User className="w-10 h-10 text-white" />
         </div>
-        <h1 className="text-3xl font-bold text-[#272262] mb-2">{user.full_name || 'User'}</h1>
+        <h1 className="text-3xl font-bold text-[#272262] mb-2">{user?.user_metadata?.full_name || user?.user_metadata?.name || (user?.email ? user.email.split('@')[0] : 'User')}</h1>
         <p className="text-[#454545]">{user.email}</p>
         {user.role === 'admin' && (
           <span className="inline-block mt-3 px-4 py-1 rounded-full bg-purple-100 text-purple-700 text-sm font-bold border border-purple-300">
@@ -256,7 +265,6 @@ export default function Profile() {
       </GlassCard>
 
       {/* Reputation & Voting Power */}
-      {reputation && (
         <GlassCard className="p-8 bg-white border border-[#E7E7E7]">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -284,7 +292,7 @@ export default function Profile() {
                 <TrendingUp className="w-4 h-4 text-[#272262]" />
                 <span className="text-xs text-[#454545]">Reputation</span>
               </div>
-              <p className="text-2xl font-bold text-[#272262]">{reputation.reputation_points}</p>
+              <p className="text-2xl font-bold text-[#272262]">{rep.reputation_points}</p>
             </div>
 
             <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
@@ -300,7 +308,7 @@ export default function Profile() {
                 <Check className="w-4 h-4 text-green-600" />
                 <span className="text-xs text-[#454545]">Best Answers</span>
               </div>
-              <p className="text-2xl font-bold text-green-600">{reputation.accepted_answers_count || 0}</p>
+              <p className="text-2xl font-bold text-green-600">{rep.accepted_answers_count || 0}</p>
             </div>
           </div>
 
@@ -351,7 +359,7 @@ export default function Profile() {
 
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-[#454545]">
-                <strong className="text-[#272262]">Your current status:</strong> With {reputation.reputation_points} points, your votes count as <strong>{voteWeight}x</strong> weight. 
+                <strong className="text-[#272262]">Your current status:</strong> With {rep.reputation_points} points, your votes count as <strong>{voteWeight}x</strong> weight. 
                 {voteWeight < 1 && " Keep contributing quality answers to increase your influence!"}
                 {voteWeight === 1 && " You're at standard voting power. Keep earning reputation to become an expert!"}
                 {voteWeight > 1 && " You're a trusted community member with enhanced voting power!"}
@@ -361,20 +369,19 @@ export default function Profile() {
 
           <div className="grid md:grid-cols-3 gap-4 mt-6">
             <div className="text-center p-4 bg-white border border-[#E7E7E7] rounded-lg">
-              <p className="text-2xl font-bold text-[#272262]">{reputation.questions_asked || 0}</p>
+              <p className="text-2xl font-bold text-[#272262]">{rep.questions_asked || 0}</p>
               <p className="text-xs text-[#454545]">Questions Asked</p>
             </div>
             <div className="text-center p-4 bg-white border border-[#E7E7E7] rounded-lg">
-              <p className="text-2xl font-bold text-[#272262]">{reputation.answers_given || 0}</p>
+              <p className="text-2xl font-bold text-[#272262]">{rep.answers_given || 0}</p>
               <p className="text-xs text-[#454545]">Answers Given</p>
             </div>
             <div className="text-center p-4 bg-white border border-[#E7E7E7] rounded-lg">
-              <p className="text-2xl font-bold text-[#272262]">{reputation.helpful_answers_count || 0}</p>
+              <p className="text-2xl font-bold text-[#272262]">{rep.helpful_answers_count || 0}</p>
               <p className="text-xs text-[#454545]">Helpful Votes Received</p>
             </div>
           </div>
         </GlassCard>
-      )}
 
       {/* AI Credits section */}
       <GlassCard className="p-8 bg-white border border-[#E7E7E7]">
