@@ -71,6 +71,7 @@ export default async function handler(req, res) {
           user_id: userId,
           email: email,
           username: username || null,
+          role: 'user',
           created_at: new Date().toISOString(),
         }
       ])

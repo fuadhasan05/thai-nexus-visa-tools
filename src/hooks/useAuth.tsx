@@ -111,6 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           user_id: user.id,
           email: user.email ?? email,
           username: profileData?.username ?? null,
+          role: 'user',
           created_at: new Date().toISOString(),
         };
 
