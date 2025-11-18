@@ -466,15 +466,15 @@ function LayoutContent({ children, currentPageName }) {
               {currentUser ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded-full">
-                      <User className="w-5 h-5" />
+                    <Button variant="ghost" size="icon" className="rounded-full cursor-pointer">
+                      <User className="w-5 h-5 text-black" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4" />
-                        <span className="truncate max-w-[200px]">{currentUser.full_name || currentUser.email}</span>
+                        <span className="truncate max-w-[200px]">{currentUser?.user_metadata?.full_name || currentUser.email}</span>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
