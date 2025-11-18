@@ -12,6 +12,7 @@ export default function SignupPage() {
   const { user, loading, error, signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [localError, setLocalError] = useState(null);
 
@@ -27,9 +28,43 @@ export default function SignupPage() {
       return;
     }
     try {
-      await signUp(email, password);
-      // On sign up, Supabase often requires email confirmation. Redirect user to a welcome/verification page or home.
-      router.replace('/');
+      const result = await signUp(email, password, { username });
+      
+      // FIX: If user was created but profile insert failed on client, call API endpoint to create profile via service role
+      if (result?.user && result?.needsProfileCreation) {
+        console.log('[Signup] Profile creation failed on client, attempting via API endpoint...');
+        try {
+          const apiResponse = await fetch('/api/create-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: result.user.id,
+              email: result.user.email || email,
+              username: username,
+            }),
+          });
+          
+          if (apiResponse.ok) {
+            const apiData = await apiResponse.json();
+            console.log('[Signup] Profile created via API:', apiData);
+          } else {
+            const apiError = await apiResponse.json();
+            console.warn('[Signup] API profile creation failed:', apiError);
+            // Don't block signup redirect even if profile API fails
+          }
+        } catch (apiErr) {
+          console.error('[Signup] Error calling profile API:', apiErr);
+          // Continue with redirect even if API call fails
+        }
+      }
+      
+      // Redirect if user was created
+      if (result?.user) {
+        router.replace('/');
+      } else {
+        // No user returned (email confirmation may be required)
+        setLocalError('Account created! Please check your email to confirm your account before signing in.');
+      }
     } catch (err) {
       setLocalError(err.message || 'Sign up failed');
     }
@@ -63,6 +98,13 @@ export default function SignupPage() {
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="you@example.com" required className="pl-10 py-3" />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium text-gray-700">Username</Label>
+              <div className="relative">
+                <Input value={username} onChange={(e) => setUsername(e.target.value)} type="text" placeholder="Display name" required className="py-3" />
               </div>
             </div>
 

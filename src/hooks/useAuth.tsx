@@ -1,13 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { User } from '@/types/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 
 type AuthContextType = {
   user: User | null;
   loading: boolean;
   error: Error | null;
-  signIn: (email: string, password: string) => Promise<{ user: User | null; session: any }>; 
-  signUp: (email: string, password: string) => Promise<{ user: User | null; session: any }>; 
+  signIn: (email: string, password: string) => Promise<{ user: User | null; session: any }>;
+  signUp: (email: string, password: string) => Promise<{ user: User | null; session: any }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
 };
@@ -25,6 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     let mounted = true;
@@ -48,8 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      // session can be null on signed out
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       const sess = session as any;
       setUser(sess?.user ?? null);
       setError(null);
@@ -70,8 +71,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (signInError) throw signInError;
       const session = (data as any)?.session ?? null;
       const user = session?.user ?? (data as any)?.user ?? null;
-      // update local state immediately
       setUser(user as User | null);
+      try { queryClient.invalidateQueries({ queryKey: ['current-user'] }); } catch (e) {}
       return { user, session };
     } catch (err) {
       const e = err instanceof Error ? err : new Error('Sign in failed');
@@ -82,17 +83,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signUp = async (email: string, password: string) => {
+  // signUp now accepts optional profile data to insert into `profiles` table after account creation.
+  const signUp = async (
+    email: string,
+    password: string,
+    profileData?: { username?: string }
+  ) => {
     setLoading(true);
     setError(null);
     try {
       const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
       if (signUpError) throw signUpError;
-      // Supabase may or may not return a session depending on settings
+
       const session = (data as any)?.session ?? null;
       const user = (data as any)?.user ?? session?.user ?? null;
+
+      // FIX: If supabase returned a user immediately (depends on your auth settings), insert profile row
+      // Otherwise, return userCreated flag so client can call API endpoint to create profile via service role
+      let profileCreated = false;
+      let profileError: any = null;
+
+      if (user && user.id) {
+        console.log(`[Auth] Attempting to create profile for user ${user.id} with email ${email} and username ${profileData?.username}`);
+        
+        const profile = {
+          id: user.id,
+          user_id: user.id,
+          email: user.email ?? email,
+          username: profileData?.username ?? null,
+          created_at: new Date().toISOString(),
+        };
+
+        const { error: insertError } = await supabase.from('profiles').insert([profile]);
+        if (insertError) {
+          // Log the error but don't fail signup - return it so client knows profile creation failed
+          console.warn(`[Auth] Profile insert error for user ${user.id}:`, insertError.message || insertError);
+          profileError = insertError;
+        } else {
+          console.log(`[Auth] Profile created successfully for user ${user.id}`);
+          profileCreated = true;
+        }
+      } else {
+        console.log('[Auth] No user returned from signUp (email confirmation may be required). Client should call API to create profile.');
+      }
+
       setUser(user as User | null);
-      return { user, session };
+      try { queryClient.invalidateQueries({ queryKey: ['current-user'] }); } catch (e) {}
+      
+      // Return profileError so client can decide to retry via API endpoint
+      return { user, session, profileCreated, profileError, needsProfileCreation: !!user && !profileCreated };
     } catch (err) {
       const e = err instanceof Error ? err : new Error('Sign up failed');
       setError(e);
@@ -109,6 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error: signOutError } = await supabase.auth.signOut();
       if (signOutError) throw signOutError;
       setUser(null);
+      try { queryClient.invalidateQueries({ queryKey: ['current-user'] }); } catch (e) {}
     } catch (err) {
       const e = err instanceof Error ? err : new Error('Sign out failed');
       setError(e);

@@ -4,6 +4,7 @@ import "../global.css";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorProvider } from '../components/ErrorNotification';
 import { ConfirmProvider } from '../components/ConfirmDialog';
+import { AuthProvider } from '@/hooks/useAuth';
 
 // Create a client for react-query (will be created per instance on the server, per session on client)
 const createQueryClient = () => {
@@ -40,9 +41,11 @@ export default function MyApp({ Component, pageProps }) {
     <QueryClientProvider client={queryClient}>
       <ErrorProvider>
         <ConfirmProvider>
-          <Layout>
-            <Component {...pageProps} />
-          </Layout>
+          <AuthProvider>
+            <Layout>
+              <Component {...pageProps} />
+            </Layout>
+          </AuthProvider>
         </ConfirmProvider>
       </ErrorProvider>
     </QueryClientProvider>

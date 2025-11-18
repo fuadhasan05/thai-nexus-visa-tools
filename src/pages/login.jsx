@@ -24,8 +24,14 @@ export default function LoginPage() {
     e.preventDefault();
     setLocalError(null);
     try {
-      await signIn(email, password);
-      router.replace('/');
+      const result = await signIn(email, password);
+      if (result?.user) {
+        router.replace('/');
+      } else {
+        // No immediate session (maybe OAuth or email confirmation flow), let effect handle redirect
+        // But provide feedback
+        setLocalError('Login successful — finishing authentication. If you are not redirected, refresh the page.');
+      }
     } catch (err) {
       setLocalError(err.message || 'Login failed');
     }

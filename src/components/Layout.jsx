@@ -48,6 +48,7 @@ import { ErrorProvider } from './ErrorNotification';
 import { ConfirmProvider } from './ConfirmDialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/hooks/useAuth';
 
 import SEOHead from './SEOHead';
 import AIAssistant from "./AIAssistant";
@@ -110,20 +111,16 @@ function LayoutContent({ children, currentPageName }) {
   const { currentLanguage, changeLanguage, languageNames, availableLanguages, getTranslation } = useTranslation();
   const [languageSearch, setLanguageSearch] = useState('');
 
+  // Centralized auth context so UI updates instantly when auth state changes
+  const { user: currentUser, signOut } = useAuth();
+
   // Scroll to top on route change
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [router.pathname]);
 
-  // If this is the auth page (login or signup), render a minimal layout without header/footer
   const authPaths = ['/login', '/signup'];
-  if (authPaths.includes(router.pathname)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="w-full max-w-md">{children}</div>
-      </div>
-    );
-  }
+  const isAuthPath = authPaths.includes(router.pathname);
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -135,25 +132,7 @@ function LayoutContent({ children, currentPageName }) {
   const toolMenu = getTranslation('layout', 'tool_menu', ENGLISH_CONTENT.tool_menu);
   const footer = getTranslation('layout', 'footer', ENGLISH_CONTENT.footer);
 
-  // Get current user for role-based access
-  // Only run on client (base44 is not available during SSR)
-  const isClient = typeof window !== 'undefined';
-  const { data: currentUser } = useQuery({
-    queryKey: ['current-user'],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error) return null;
-        return data?.user ?? null;
-      } catch {
-        return null;
-      }
-    },
-    enabled: isClient,
-    staleTime: 5 * 60 * 1000,
-    cacheTime: 10 * 60 * 1000,
-    retry: false,
-  });
+  
 
   const queryClient = useQueryClient();
 
@@ -184,7 +163,7 @@ function LayoutContent({ children, currentPageName }) {
       if (createErr) throw createErr;
       return created?.[0] ?? null;
     },
-    enabled: isClient && !!currentUser?.email,
+    enabled: !!currentUser?.email,
     staleTime: 1000,
   });
 
@@ -285,6 +264,15 @@ function LayoutContent({ children, currentPageName }) {
   const filteredLanguages = availableLanguages.filter(code =>
     languageNames[code]?.toLowerCase().includes(languageSearch.toLowerCase())
   );
+
+  // If this is the auth page, render a minimal layout without header/footer
+  if (isAuthPath) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md">{children}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -474,7 +462,7 @@ function LayoutContent({ children, currentPageName }) {
                     <DropdownMenuLabel>
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4" />
-                        <span className="truncate max-w-[200px]">{currentUser?.user_metadata?.full_name || currentUser.email}</span>
+                        <span className="truncate max-w-[200px]">{currentUser?.user_metadata?.full_name || currentUser?.user_metadata?.name || (currentUser?.email ? currentUser.email.split('@')[0] : 'User')}</span>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
@@ -504,7 +492,7 @@ function LayoutContent({ children, currentPageName }) {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={async () => {
                       try {
-                        await supabase.auth.signOut();
+                        await signOut();
                         // Clear cached user data and refetch
                         queryClient.invalidateQueries({ queryKey: ['current-user'] });
                         // Optionally navigate to home
@@ -659,7 +647,7 @@ function LayoutContent({ children, currentPageName }) {
                     <button
                       onClick={async () => {
                         try {
-                          await supabase.auth.signOut();
+                          await signOut();
                           queryClient.invalidateQueries({ queryKey: ['current-user'] });
                           router.push('/');
                         } catch (err) {
