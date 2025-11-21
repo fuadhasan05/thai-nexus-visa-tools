@@ -48,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
       // session can be null on signed out
       const sess = session as any;
       setUser(sess?.user ?? null);
@@ -128,7 +128,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthenticated: !!user,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // Use non-JSX return to keep this file valid as a plain .ts module
+  return React.createElement(AuthContext.Provider, { value }, children) as any;
 };
 
 /**
