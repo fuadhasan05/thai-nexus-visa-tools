@@ -38,11 +38,25 @@ export default function LoginPage() {
   };
 
   const handleGoogle = async () => {
-    if (typeof window !== 'undefined') {
-      supabase.auth.signInWithOAuth({
+    if (typeof window === 'undefined') return;
+
+    if (!supabase || !supabase.auth || typeof supabase.auth.signInWithOAuth !== 'function') {
+      setLocalError('Authentication is not configured on this deployment. Contact site admin.');
+      return;
+    }
+
+    try {
+      const result = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.origin },
       });
+
+      // Supabase v2 returns { data, error } — show friendly error if provider disabled
+      if (result?.error) {
+        setLocalError(result.error.message || 'OAuth sign-in failed');
+      }
+    } catch (err) {
+      setLocalError(err?.message || 'OAuth sign-in failed');
     }
   };
 
