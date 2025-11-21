@@ -149,7 +149,7 @@ function LayoutContent({ children, currentPageName }) {
       if (results && results.length > 0) return results[0];
 
       // Create new credits record with correct initial balance
-      const initialBalance = currentUser?.role === 'admin' ? 1000 : 5;
+      const initialBalance = (appProfile?.role === 'admin' || currentUser?.role === 'admin' || currentUser?.user_metadata?.role === 'admin') ? 1000 : 5;
       const { data: created, error: createErr } = await supabase
         .from('UserCredits')
         .insert([{
@@ -167,7 +167,20 @@ function LayoutContent({ children, currentPageName }) {
     staleTime: 1000,
   });
 
-  const isAdmin = currentUser?.role === 'admin';
+  // Fetch application profile to determine role (profiles table is the single source of truth)
+  const { data: appProfile } = useQuery({
+    queryKey: ['user-profile-layout', currentUser?.email],
+    queryFn: async () => {
+      if (!currentUser?.email) return null;
+      const { data, error } = await supabase.from('profiles').select('*').eq('email', currentUser.email).limit(1);
+      if (error) throw error;
+      return (data && data[0]) || null;
+    },
+    enabled: !!currentUser?.email,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const isAdmin = (appProfile?.role === 'admin') || (currentUser?.role === 'admin') || (currentUser?.user_metadata?.role === 'admin');
 
   const navigationItems = [
     { title: nav.home, url: createPageUrl("Home"), icon: Home },

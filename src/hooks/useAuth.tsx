@@ -11,6 +11,8 @@ type AuthContextType = {
   signUp: (email: string, password: string) => Promise<{ user: User | null; session: any }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
+  profile?: any | null;
+  isAdmin?: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,6 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [profile, setProfile] = useState<any | null>(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -38,6 +41,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const session = (data as any)?.session ?? null;
         if (mounted) {
           setUser(session?.user ?? null);
+          // fetch profile if available
+          if (session?.user?.email) {
+            try {
+              const { data: profData } = await supabase.from('profiles').select('*').eq('email', session.user.email).limit(1);
+              setProfile((profData && profData[0]) || null);
+            } catch (e) {
+              // ignore profile fetch errors here
+            }
+          }
         }
       } catch (err) {
         if (mounted) setError(err instanceof Error ? err : new Error('Unknown error'));
@@ -53,6 +65,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
       const sess = session as any;
       setUser(sess?.user ?? null);
+      // update profile when auth state changes
+      (async () => {
+        try {
+          if (sess?.user?.email) {
+            const { data: profData } = await supabase.from('profiles').select('*').eq('email', sess.user.email).limit(1);
+            setProfile((profData && profData[0]) || null);
+          } else {
+            setProfile(null);
+          }
+        } catch (e) {
+          setProfile(null);
+        }
+      })();
       setError(null);
       setLoading(false);
     });
@@ -72,6 +97,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const session = (data as any)?.session ?? null;
       const user = session?.user ?? (data as any)?.user ?? null;
       setUser(user as User | null);
+      // Try to fetch profile after sign in
+      try {
+        if (user?.email) {
+          const { data: profData } = await supabase.from('profiles').select('*').eq('email', user.email).limit(1);
+          setProfile((profData && profData[0]) || null);
+        }
+      } catch (e) {
+        // ignore
+      }
       try { queryClient.invalidateQueries({ queryKey: ['current-user'] }); } catch (e) {}
       return { user, session };
     } catch (err) {
@@ -135,6 +169,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // If no immediate user/session is returned, the signup likely requires email confirmation.
       setUser(user as User | null);
+      try {
+        if (user?.email) {
+          const { data: profData } = await supabase.from('profiles').select('*').eq('email', user.email).limit(1);
+          setProfile((profData && profData[0]) || null);
+        }
+      } catch (e) {}
       try { queryClient.invalidateQueries({ queryKey: ['current-user'] }); } catch (e) {}
       // Return profileError and whether email confirmation is required so the UI can inform the user
       const needsEmailConfirmation = !!user === false && !!session === false;
@@ -155,6 +195,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error: signOutError } = await supabase.auth.signOut();
       if (signOutError) throw signOutError;
       setUser(null);
+      setProfile(null);
       try { queryClient.invalidateQueries({ queryKey: ['current-user'] }); } catch (e) {}
     } catch (err) {
       const e = err instanceof Error ? err : new Error('Sign out failed');
@@ -173,6 +214,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signUp,
     signOut,
     isAuthenticated: !!user,
+    profile,
+    isAdmin: !!(profile?.role === 'admin' || user?.user_metadata?.role === 'admin' || user?.role === 'admin'),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
