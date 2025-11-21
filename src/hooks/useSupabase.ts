@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { SupabaseError, FetchOptions } from '@/types/supabase';
 
@@ -62,9 +62,9 @@ export function useSupabaseQuery<T>(table: string, options?: FetchOptions) {
   }, [table, options]);
 
   // Fetch data on mount
-  useState(() => {
+  useEffect(() => {
     fetchData();
-  });
+  }, [fetchData]);
 
   return {
     data,
