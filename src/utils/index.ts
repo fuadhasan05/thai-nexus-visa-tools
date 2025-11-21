@@ -2,10 +2,13 @@
 export const createPageUrl = (pageName: string) => {
   if (!pageName) return '';
 
+  // Normalize to a lowercase key so callers can pass 'login', 'Login', or 'LOGIN'
+  const key = pageName.replace(/\s+/g, '').toLowerCase();
+
   const pageMap: Record<string, string> = {
     // Main pages
-    Home: '/',
-    VisaNavigator: '/visa-navigator',
+    home: '/',
+    visanavigator: '/visa-navigator',
     EligibilityCalculator: '/tools/eligibility-calculator',
     DocumentValidator: '/tools/document-validator',
     CurrencyConverter: '/tools/currency-converter',
@@ -17,29 +20,31 @@ export const createPageUrl = (pageName: string) => {
     DocumentChecklist: '/tools/document-checklist',
     NinetyDayReport: '/tools/90-day-report',
     AgentComparison: '/partner/agents-comparison',
-    Profile: '/profile',
-    Settings: '/settings',
-    Contact: '/contact',
-    KnowledgeHub: '/knowledge/hub',
-    KnowledgePost: '/knowledge/post',
-    KnowledgeContributor: '/knowledge/contributor',
-    BecomeContributor: '/knowledge/become-contributor',
-    PartnerWithUs: '/partner/with-us',
-    TermsOfService: '/terms-of-service',
-    PrivacyPolicy: '/privacy-policy',
+    profile: '/profile',
+    settings: '/settings',
+    contact: '/contact',
+    knowledgehub: '/knowledge/hub',
+    knowledgepost: '/knowledge/post',
+    knowledgecontributor: '/knowledge/contributor',
+    becomecontributor: '/knowledge/become-contributor',
+    partnerwithus: '/partner/with-us',
+    termsofservice: '/terms-of-service',
+    privacypolicy: '/privacy-policy',
+    login: '/login',
+    signup: '/signup',
 
     // Admin pages
-    AdminManager: '/admin',
-    AdminKnowledge: '/admin/knowledge',
-    AdminKnowledgeEdit: '/admin/knowledge-edit',
-    AdminBugs: '/admin/bugs',
-    AdminSEO: '/admin/seo',
-    AdminUsers: '/admin/users',
-    AdminPartners: '/admin/partners',
-    AdminPricing: '/admin/pricing',
-    AdminTranslations: '/admin/translations',
-    AdminContent: '/admin/content',
+    adminmanager: '/admin',
+    adminknowledge: '/admin/knowledge',
+    adminknowledgeedit: '/admin/knowledge-edit',
+    adminbugs: '/admin/bugs',
+    adminseo: '/admin/seo',
+    adminusers: '/admin/users',
+    adminpartners: '/admin/partners',
+    adminpricing: '/admin/pricing',
+    admintranslations: '/admin/translations',
+    admincontent: '/admin/content',
   };
 
-  return pageMap[pageName as keyof typeof pageMap] || '';
+  return pageMap[key as keyof typeof pageMap] || '';
 };
