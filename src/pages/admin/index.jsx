@@ -14,11 +14,6 @@ import ContactCTA from '../../components/ContactCTA';
 import VisaTypeSelect from '../../components/VisaTypeSelect';
 
 
-export const getStaticProps = async () => {
-  return {
-    notFound: true,
-  };
-};
 export default function AdminManager() {
   const [arrivalDate, setArrivalDate] = useState('');
   const [visaType, setVisaType] = useState('');
