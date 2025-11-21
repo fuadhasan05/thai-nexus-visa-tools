@@ -15,6 +15,7 @@ export default function SignupPage() {
   const [username, setUsername] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [localError, setLocalError] = useState(null);
+  const [localMessage, setLocalMessage] = useState(null);
 
   useEffect(() => {
     if (user) router.replace('/');
@@ -28,6 +29,7 @@ export default function SignupPage() {
       return;
     }
     try {
+      setLocalMessage(null);
       const result = await signUp(email, password, { username });
       
       // FIX: If user was created but profile insert failed on client, call API endpoint to create profile via service role
@@ -58,13 +60,20 @@ export default function SignupPage() {
         }
       }
       
-      // Redirect if user was created
+      // Redirect if user was created immediately
       if (result?.user) {
         router.replace('/');
-      } else {
-        // No user returned (email confirmation may be required)
-        setLocalError('Account created! Please check your email to confirm your account before signing in.');
+        return;
       }
+
+      // If the signup requires email confirmation, show a friendly message
+      if (result?.needsEmailConfirmation) {
+        setLocalMessage('Account created! Check your email for a verification link to complete registration.');
+        return;
+      }
+
+      // Fallback: show a generic message if no user/session returned
+      setLocalMessage('Account created! If you do not receive an email, contact support.');
     } catch (err) {
       setLocalError(err.message || 'Sign up failed');
     }
@@ -123,6 +132,10 @@ export default function SignupPage() {
                 <Input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} type="password" placeholder="Re-enter password" required className="pl-10 py-3" />
               </div>
             </div>
+
+            {(localMessage) && (
+              <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{localMessage}</div>
+            )}
 
             {(localError || error) && (
               <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{localError || error?.message}</div>

@@ -92,7 +92,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     setError(null);
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+      // Provide an explicit email redirect so verification links return to this app's origin.
+      const redirectTo = (typeof window !== 'undefined' && window.location?.origin) || process.env.NEXT_PUBLIC_SITE_URL || '';
+      const { data, error: signUpError } = await supabase.auth.signUp(
+        { email, password },
+        { emailRedirectTo: redirectTo }
+      );
       if (signUpError) throw signUpError;
 
       const session = (data as any)?.session ?? null;
@@ -128,11 +133,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('[Auth] No user returned from signUp (email confirmation may be required). Client should call API to create profile.');
       }
 
+      // If no immediate user/session is returned, the signup likely requires email confirmation.
       setUser(user as User | null);
       try { queryClient.invalidateQueries({ queryKey: ['current-user'] }); } catch (e) {}
-      
-      // Return profileError so client can decide to retry via API endpoint
-      return { user, session, profileCreated, profileError, needsProfileCreation: !!user && !profileCreated };
+      // Return profileError and whether email confirmation is required so the UI can inform the user
+      const needsEmailConfirmation = !!user === false && !!session === false;
+      return { user, session, profileCreated, profileError, needsProfileCreation: !!user && !profileCreated, needsEmailConfirmation };
     } catch (err) {
       const e = err instanceof Error ? err : new Error('Sign up failed');
       setError(e);
