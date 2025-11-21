@@ -44,7 +44,7 @@ export default function Settings() {
     queryFn: async () => {
       if (!user?.email) return null;
       const { data, error } = await supabase
-        .from('ContributorProfile')
+        .from('contributorapplications')
         .select('*')
         .eq('user_email', user.email)
         .limit(1);
@@ -165,7 +165,7 @@ export default function Settings() {
     
     try {
       const { data: existing, error } = await supabase
-        .from('ContributorProfile')
+        .from('contributorapplications')
         .select('id')
         .eq('profile_slug', slug)
         .limit(1);
@@ -193,7 +193,7 @@ export default function Settings() {
           throw new Error(validation);
         }
         const { data: existing, error: existingError } = await supabase
-          .from('ContributorProfile')
+          .from('contributorapplications')
           .select('id')
           .eq('profile_slug', data.profile_slug)
           .limit(1);
@@ -210,14 +210,14 @@ export default function Settings() {
       };
       if (profile) {
         const { error } = await supabase
-          .from('ContributorProfile')
+          .from('contributorapplications')
           .update(profileData)
           .eq('id', profile.id);
         if (error) throw error;
         return { ...profile, ...profileData };
       } else {
         const { data: inserted, error } = await supabase
-          .from('ContributorProfile')
+          .from('contributorapplications')
           .insert(profileData)
           .select()
           .single();

@@ -41,7 +41,7 @@ export default function AdminKnowledge() {
     queryKey: ['user-profile', currentUser?.email],
     queryFn: async () => {
       if (!currentUser?.email) return null; // Ensure email exists before querying
-      const profiles = await base44.entities.ContributorProfile.filter({ user_email: currentUser.email });
+      const profiles = await base44.entities.contributorapplications.filter({ user_email: currentUser.email });
       return profiles[0] || null;
     },
     enabled: !!currentUser?.email,
@@ -49,8 +49,8 @@ export default function AdminKnowledge() {
     cacheTime: Infinity,
   });
 
-  // STRICT CHECK: Only admin (User.role) and moderator (ContributorProfile.role) can moderate
-  // Contributors (ContributorProfile.role = 'contributor') CANNOT access this page
+  // STRICT CHECK: Only admin (User.role) and moderator (contributorapplications.role) can moderate
+  // Contributors (contributorapplications.role = 'contributor') CANNOT access this page
   const canModerate = currentUser?.role === 'admin' || (userProfile && userProfile.role === 'moderator');
 
   // Redirect non-moderators (including contributors)
@@ -92,7 +92,7 @@ export default function AdminKnowledge() {
   // Fetch contributor applications
   const { data: applications = [] } = useQuery({
     queryKey: ['admin-contributor-applications'],
-    queryFn: () => base44.entities.ContributorProfile.filter({ contributor_status: 'pending_approval' }, '-application_date'),
+    queryFn: () => base44.entities.contributorapplications.filter({ contributor_status: 'pending_approval' }, '-application_date'),
     enabled: canModerate,
   });
 
@@ -120,10 +120,10 @@ export default function AdminKnowledge() {
 
       // Update contributor post_count
       if (post.author_email) { // Added check for author_email
-        const profiles = await base44.entities.ContributorProfile.filter({ user_email: post.author_email });
+        const profiles = await base44.entities.contributorapplications.filter({ user_email: post.author_email });
         if (profiles.length > 0) {
           const profile = profiles[0];
-          await base44.entities.ContributorProfile.update(profile.id, {
+          await base44.entities.contributorapplications.update(profile.id, {
             post_count: (profile.post_count || 0) + 1
           });
         }
@@ -239,7 +239,7 @@ export default function AdminKnowledge() {
 
   // Approve contributor application
   const approveApplicationMutation = useMutation({
-    mutationFn: (profileId) => base44.entities.ContributorProfile.update(profileId, {
+    mutationFn: (profileId) => base44.entities.contributorapplications.update(profileId, {
       contributor_status: 'approved',
       approval_date: new Date().toISOString(),
       role: 'contributor'

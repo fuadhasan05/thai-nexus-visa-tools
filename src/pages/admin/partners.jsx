@@ -362,12 +362,12 @@ function ContributorManagement() {
 
   const { data: contributorApplications = [] } = useQuery({
     queryKey: ['contributor-applications'],
-    queryFn: () => base44.entities.ContributorProfile.list('-created_date'),
+    queryFn: () => base44.entities.contributorapplications.list('-created_date'),
     initialData: []
   });
 
   const approveContributorMutation = useMutation({
-    mutationFn: ({ id }) => base44.entities.ContributorProfile.update(id, {
+    mutationFn: ({ id }) => base44.entities.contributorapplications.update(id, {
       contributor_status: 'approved',
       approval_date: new Date().toISOString()
     }),
@@ -381,7 +381,7 @@ function ContributorManagement() {
   });
 
   const rejectContributorMutation = useMutation({
-    mutationFn: ({ id, reason }) => base44.entities.ContributorProfile.update(id, {
+    mutationFn: ({ id, reason }) => base44.entities.contributorapplications.update(id, {
       contributor_status: 'none',
       moderation_notes: reason
     }),

@@ -60,7 +60,7 @@ export default function KnowledgeContributor() {
 
       if (profileSlug) {
         const { data, error } = await supabase
-          .from('ContributorProfile')
+          .from('contributorapplications')
           .select('*')
           .eq('profile_slug', profileSlug)
           .eq('profile_visible', true)
@@ -71,7 +71,7 @@ export default function KnowledgeContributor() {
 
       if ((!profiles || profiles.length === 0) && profileId) {
         const { data, error } = await supabase
-          .from('ContributorProfile')
+          .from('contributorapplications')
           .select('*')
           .eq('id', profileId)
           .eq('profile_visible', true)
@@ -82,7 +82,7 @@ export default function KnowledgeContributor() {
 
       if ((!profiles || profiles.length === 0) && contributorEmail) {
         const { data, error } = await supabase
-          .from('ContributorProfile')
+          .from('contributorapplications')
           .select('*')
           .eq('user_email', contributorEmail)
           .eq('profile_visible', true)

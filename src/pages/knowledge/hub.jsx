@@ -78,7 +78,7 @@ export default function KnowledgeHub() {
   const { data: topContributors = [] } = useQuery({
     queryKey: ['top-contributors'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('ContributorProfile').select('*').eq('profile_visible', true).eq('subscription_active', true).in('role', ['contributor', 'moderator', 'admin']).order('post_count', { ascending: false }).limit(6);
+      const { data, error } = await supabase.from('contributorapplications').select('*').eq('profile_visible', true).eq('subscription_active', true).in('role', ['contributor', 'moderator', 'admin']).order('post_count', { ascending: false }).limit(6);
       if (error) throw error;
       return (data || []).filter(p => (p.post_count || 0) > 0);
     }
@@ -166,7 +166,7 @@ export default function KnowledgeHub() {
   const { data: userProfile } = useQuery({
     queryKey: ['user-profile', currentUser?.email],
     queryFn: async () => {
-      const { data, error } = await supabase.from('ContributorProfile').select('*').eq('user_email', currentUser.email).limit(1);
+      const { data, error } = await supabase.from('contributorapplications').select('*').eq('user_email', currentUser.email).limit(1);
       if (error) throw error;
       return (data && data[0]) || null;
     },

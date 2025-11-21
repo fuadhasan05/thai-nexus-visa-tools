@@ -123,7 +123,7 @@ export default function KnowledgePost() {
     queryFn: async () => {
       if (!currentUser?.email) return null;
       const { data, error } = await supabase
-        .from('ContributorProfile')
+        .from('contributorapplications')
         .select('*')
         .eq('user_email', currentUser.email)
         .limit(1);

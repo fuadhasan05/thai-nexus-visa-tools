@@ -66,7 +66,7 @@ export default function AdminUsers() {
   // Fetch all contributor profiles
   const { data: profiles = [] } = useQuery({
     queryKey: ['all-profiles'],
-    queryFn: () => base44.entities.ContributorProfile.list('-created_date')
+    queryFn: () => base44.entities.contributorapplications.list('-created_date')
   });
 
   // Add query for vote statistics
@@ -127,9 +127,9 @@ export default function AdminUsers() {
   const updateProfileMutation = useMutation({
     mutationFn: async ({ profileId, data }) => {
       if (profileId) {
-        return await base44.entities.ContributorProfile.update(profileId, data);
+        return await base44.entities.contributorapplications.update(profileId, data);
       } else {
-        return await base44.entities.ContributorProfile.create(data);
+        return await base44.entities.contributorapplications.create(data);
       }
     },
     onSuccess: () => {
@@ -146,7 +146,7 @@ export default function AdminUsers() {
 
   // Delete profile mutation
   const deleteProfileMutation = useMutation({
-    mutationFn: (profileId) => base44.entities.ContributorProfile.delete(profileId),
+    mutationFn: (profileId) => base44.entities.contributorapplications.delete(profileId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-profiles'] });
       addSuccess('Profile deleted successfully');

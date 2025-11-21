@@ -65,7 +65,7 @@ export default function Profile() {
     queryFn: async () => {
       if (!user?.email) return null;
       const { data, error } = await supabase
-        .from('ContributorProfile')
+        .from('contributorapplications')
         .select('*')
         .eq('user_email', user.email)
         .limit(1);

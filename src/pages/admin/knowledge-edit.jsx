@@ -61,7 +61,7 @@ export default function AdminKnowledgeEdit() {
     queryKey: ['user-profile', currentUser?.email],
     queryFn: async () => {
       if (!currentUser?.email) return null;
-      const profiles = await base44.entities.ContributorProfile.filter({ user_email: currentUser.email });
+      const profiles = await base44.entities.contributorapplications.filter({ user_email: currentUser.email });
       return profiles[0];
     },
     enabled: !!currentUser?.email,

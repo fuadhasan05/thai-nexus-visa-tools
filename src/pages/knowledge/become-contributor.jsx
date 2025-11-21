@@ -39,7 +39,7 @@ export default function BecomeContributor() {
     queryFn: async () => {
       if (!currentUser?.email) return null;
       const { data, error } = await supabase
-        .from('ContributorProfile')
+        .from('contributorapplications')
         .select('*')
         .eq('user_email', currentUser.email)
         .limit(1);
@@ -59,7 +59,7 @@ export default function BecomeContributor() {
 
       if (existingProfile) {
         const { error } = await supabase
-          .from('ContributorProfile')
+          .from('contributorapplications')
           .update(profileData)
           .eq('id', existingProfile.id);
         if (error) throw error;
@@ -72,7 +72,7 @@ export default function BecomeContributor() {
           ...profileData
         };
         const { data: inserted, error } = await supabase
-          .from('ContributorProfile')
+          .from('contributorapplications')
           .insert(insertData)
           .select()
           .single();
