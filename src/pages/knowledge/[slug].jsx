@@ -5,6 +5,7 @@
 
 import Head from 'next/head';
 import { supabase } from '@/lib/supabaseClient';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export default function KnowledgePost({ post }) {
   if (!post) return <div>Post not found</div>;
@@ -29,13 +30,14 @@ export default function KnowledgePost({ post }) {
 
 export async function getStaticPaths() {
   // Pre-build paths for published posts. Use blocking fallback for SEO on new posts.
-  const { data, error } = await supabase
+  // Use server-side admin client for static generation to avoid anon role/schema issues
+  const { data, error } = await supabaseAdmin
     .from('knowledge')
     .select('slug')
     .eq('published', true);
 
   if (error) {
-    console.error('supabase error fetching slugs:', error);
+    console.error('supabaseAdmin error fetching slugs:', error);
   }
 
   const paths = (data || []).map((r) => ({ params: { slug: r.slug } }));
@@ -47,7 +49,7 @@ export async function getStaticProps({ params }) {
   const slug = params?.slug;
   if (!slug) return { notFound: true };
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('knowledge')
     .select('id, title, slug, summary, content, author, tags, published, published_at, created_at, updated_at')
     .eq('slug', slug)
