@@ -25,11 +25,7 @@ import {
 import { useError } from '../../components/ErrorNotification';
 import { useConfirm } from '../../components/ConfirmDialog';
 
-export const getStaticProps = async () => {
-  return {
-    notFound: true,
-  };
-};
+// removed getStaticProps stub so admin page renders at runtime
 export default function AdminPartners() {
   // ALWAYS call ALL hooks at the top - never conditionally
   const [showDialog, setShowDialog] = useState(false);
@@ -42,11 +38,19 @@ export default function AdminPartners() {
   const { data: currentUser, isLoading: isLoadingUser } = useQuery({
     queryKey: ['current-user-admin'],
     queryFn: async () => {
-      try {
-        return await base44.auth.me();
-      } catch (error) {
-        return null;
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr) return null;
+      const user = userData?.user;
+      if (!user) return null;
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (profileErr) {
+        return { id: user.id, email: user.email };
       }
+      return profile;
     },
     staleTime: 5 * 60 * 1000,
     cacheTime: 10 * 60 * 1000,
@@ -55,23 +59,41 @@ export default function AdminPartners() {
 
   const { data: partners = [] } = useQuery({
     queryKey: ['business-partners'],
-    queryFn: () => base44.entities.BusinessPartner.list('-created_date'),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('business_partners')
+        .select('*')
+        .order('created_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
     initialData: [],
     enabled: currentUser?.role === 'admin'
   });
 
   const { data: leadRequests = [] } = useQuery({
     queryKey: ['lead-requests'],
-    queryFn: () => base44.entities.LeadRequest.list('-created_date'),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lead_requests')
+        .select('*')
+        .order('created_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
     initialData: [],
     enabled: currentUser?.role === 'admin'
   });
 
   const approveMutation = useMutation({
-    mutationFn: ({ id }) => base44.entities.BusinessPartner.update(id, {
-      status: 'approved',
-      is_verified: true
-    }),
+    mutationFn: async ({ id }) => {
+      const { error } = await supabase
+        .from('business_partners')
+        .update({ status: 'approved', is_verified: true })
+        .eq('id', id);
+      if (error) throw error;
+      return true;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['business-partners'] });
       addSuccess('Partner approved successfully!');
@@ -82,7 +104,11 @@ export default function AdminPartners() {
   });
 
   const updatePartnerMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.BusinessPartner.update(id, data),
+    mutationFn: async ({ id, data }) => {
+      const { error } = await supabase.from('business_partners').update(data).eq('id', id);
+      if (error) throw error;
+      return true;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['business-partners'] });
       setShowDialog(false);
@@ -362,15 +388,26 @@ function ContributorManagement() {
 
   const { data: contributorApplications = [] } = useQuery({
     queryKey: ['contributor-applications'],
-    queryFn: () => base44.entities.contributorapplications.list('-created_date'),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contributorapplications')
+        .select('*')
+        .order('created_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
     initialData: []
   });
 
   const approveContributorMutation = useMutation({
-    mutationFn: ({ id }) => base44.entities.contributorapplications.update(id, {
-      contributor_status: 'approved',
-      approval_date: new Date().toISOString()
-    }),
+    mutationFn: async ({ id }) => {
+      const { error } = await supabase
+        .from('contributorapplications')
+        .update({ contributor_status: 'approved', approval_date: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+      return true;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contributor-applications'] });
       addSuccess('Contributor approved! They can now subscribe.');
@@ -381,10 +418,14 @@ function ContributorManagement() {
   });
 
   const rejectContributorMutation = useMutation({
-    mutationFn: ({ id, reason }) => base44.entities.contributorapplications.update(id, {
-      contributor_status: 'none',
-      moderation_notes: reason
-    }),
+    mutationFn: async ({ id, reason }) => {
+      const { error } = await supabase
+        .from('contributorapplications')
+        .update({ contributor_status: 'none', moderation_notes: reason })
+        .eq('id', id);
+      if (error) throw error;
+      return true;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contributor-applications'] });
       addSuccess('Application rejected');
@@ -543,13 +584,26 @@ function OfficeManagement() {
 
   const { data: offices = [] } = useQuery({
     queryKey: ['all-immigration-offices'],
-    queryFn: () => base44.entities.ImmigrationOffice.list('-created_date'),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('immigration_offices')
+        .select('*')
+        .order('created_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
     initialData: []
   });
 
   const toggleActiveMutation = useMutation({
-    mutationFn: ({ id, is_active }) =>
-      base44.entities.ImmigrationOffice.update(id, { is_active }),
+    mutationFn: async ({ id, is_active }) => {
+      const { error } = await supabase
+        .from('immigration_offices')
+        .update({ is_active })
+        .eq('id', id);
+      if (error) throw error;
+      return true;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-immigration-offices'] });
       queryClient.invalidateQueries({ queryKey: ['immigration-offices'] });
@@ -561,7 +615,11 @@ function OfficeManagement() {
   });
 
   const deleteOfficeMutation = useMutation({
-    mutationFn: (id) => base44.entities.ImmigrationOffice.delete(id),
+    mutationFn: async (id) => {
+      const { error } = await supabase.from('immigration_offices').delete().eq('id', id);
+      if (error) throw error;
+      return true;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-immigration-offices'] });
       queryClient.invalidateQueries({ queryKey: ['immigration-offices'] });
@@ -574,14 +632,16 @@ function OfficeManagement() {
 
   const syncGoogleMutation = useMutation({
     mutationFn: async () => {
-      const existingOffices = await base44.entities.ImmigrationOffice.list();
+      const { data: existingOffices = [], error: existingErr } = await supabase.from('immigration_offices').select('*');
+      if (existingErr) throw existingErr;
       const existingCoords = new Set(
         existingOffices.map(o => `${o.latitude.toFixed(4)},${o.longitude.toFixed(4)}`)
       );
 
       // More comprehensive search queries
-      const response = await base44.functions.invoke('searchImmigrationOffices', {
-        searchQueries: [
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('searchImmigrationOffices', {
+        body: JSON.stringify({
+          searchQueries: [
           // English searches
           "Immigration Office Thailand",
           "Immigration Bureau Thailand",
@@ -608,18 +668,22 @@ function OfficeManagement() {
           "ตรวจคนเข้าเมืองหัวหิน",
           "ตรวจคนเข้าเมืองพัทยา"
         ]
-      });
+      })
+    });
 
-      console.log('Search response:', response.data);
+      if (fnError) throw fnError;
+      const response = fnData;
 
-      if (!response.data?.offices) {
-        const errorMsg = response.data?.searchLog
-          ? `Search completed but found 0 offices. Check logs: ${JSON.stringify(response.data.searchLog)}`
+      console.log('Search response:', response);
+
+      if (!response?.offices) {
+        const errorMsg = response?.searchLog
+          ? `Search completed but found 0 offices. Check logs: ${JSON.stringify(response.searchLog)}`
           : 'No offices returned from search';
         throw new Error(errorMsg);
       }
 
-      const validOffices = response.data.offices.filter(office => {
+      const validOffices = response.offices.filter(office => {
         // Validate coordinates
         if (!office.latitude || !office.longitude) {
           console.warn('Office missing coordinates:', office.name);
@@ -645,9 +709,9 @@ function OfficeManagement() {
       if (validOffices.length === 0) {
         return {
           added: 0,
-          skipped: response.data.offices.length,
-          total: response.data.offices.length,
-          searchLog: response.data.searchLog,
+          skipped: response.offices.length,
+          total: response.offices.length,
+          searchLog: response.searchLog,
           message: 'No new offices found. All were duplicates or invalid.'
         };
       }
@@ -673,13 +737,14 @@ function OfficeManagement() {
         is_active: true
       }));
 
-      await base44.entities.ImmigrationOffice.bulkCreate(bulkData);
+      const { error: bulkErr } = await supabase.from('immigration_offices').insert(bulkData);
+      if (bulkErr) throw bulkErr;
 
       return {
         added: validOffices.length,
-        skipped: response.data.offices.length - validOffices.length,
-        total: response.data.offices.length,
-        searchLog: response.data.searchLog,
+        skipped: response.offices.length - validOffices.length,
+        total: response.offices.length,
+        searchLog: response.searchLog,
         message: `Successfully added ${validOffices.length} new immigration offices`
       };
     },

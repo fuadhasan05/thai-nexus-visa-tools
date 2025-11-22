@@ -14,11 +14,7 @@ import {
 import GlassCard from '../../components/GlassCard';
 import { useError } from '../../components/ErrorNotification';
 
-export const getStaticProps = async () => {
-  return {
-    notFound: true,
-  };
-};
+// removed getStaticProps stub so admin page renders at runtime
 export default function AdminKnowledge() {
   const [activeTab, setActiveTab] = useState('posts');
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,11 +25,17 @@ export default function AdminKnowledge() {
   const { data: currentUser } = useQuery({
     queryKey: ['current-user'],
     queryFn: async () => {
-      try {
-        return await base44.auth.me();
-      } catch {
-        return null;
-      }
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr) return null;
+      const user = userData?.user;
+      if (!user) return null;
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (profileErr) return { id: user.id, email: user.email };
+      return profile;
     }
   });
 
@@ -41,8 +43,9 @@ export default function AdminKnowledge() {
     queryKey: ['user-profile', currentUser?.email],
     queryFn: async () => {
       if (!currentUser?.email) return null; // Ensure email exists before querying
-      const profiles = await base44.entities.contributorapplications.filter({ user_email: currentUser.email });
-      return profiles[0] || null;
+      const { data, error } = await supabase.from('contributorapplications').select('*').eq('user_email', currentUser.email).limit(1);
+      if (error) throw error;
+      return (data && data[0]) || null;
     },
     enabled: !!currentUser?.email,
     staleTime: Infinity, // Profile data for role check doesn't change often
@@ -51,7 +54,7 @@ export default function AdminKnowledge() {
 
   // STRICT CHECK: Only admin (User.role) and moderator (contributorapplications.role) can moderate
   // Contributors (contributorapplications.role = 'contributor') CANNOT access this page
-  const canModerate = currentUser?.role === 'admin' || (userProfile && userProfile.role === 'moderator');
+  const canModerate = (currentUser?.role === 'admin') || (userProfile?.role === 'moderator');
 
   // Redirect non-moderators (including contributors)
   React.useEffect(() => {
@@ -64,68 +67,94 @@ export default function AdminKnowledge() {
   // Fetch pending posts
   const { data: pendingPosts = [] } = useQuery({
     queryKey: ['admin-pending-posts'],
-    queryFn: () => base44.entities.KnowledgePost.filter({ status: 'pending_moderation' }, '-created_date'),
-    enabled: canModerate,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('knowledge').select('*').eq('status', 'pending_moderation').order('created_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: Boolean(canModerate),
   });
 
   // Fetch all posts
   const { data: allPosts = [] } = useQuery({
     queryKey: ['admin-all-posts'],
-    queryFn: () => base44.entities.KnowledgePost.list('-created_date'),
-    enabled: canModerate,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('knowledge').select('*').order('created_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: Boolean(canModerate),
+  });
+
+  // Filtered posts for the "All Posts" tab
+  const filteredPosts = (allPosts || []).filter(p => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (p.title || '').toLowerCase().includes(q) || (p.author_name || '').toLowerCase().includes(q);
   });
 
   // Fetch pending comments
   const { data: pendingComments = [] } = useQuery({
     queryKey: ['admin-pending-comments'],
-    queryFn: () => base44.entities.KnowledgeComment.filter({ status: 'pending' }, '-created_date'),
-    enabled: canModerate,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('knowledge_comments').select('*').eq('status', 'pending').order('created_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: Boolean(canModerate),
   });
 
   // Fetch edit suggestions
   const { data: editSuggestions = [] } = useQuery({
     queryKey: ['admin-edit-suggestions'],
-    queryFn: () => base44.entities.KnowledgeEditSuggestion.filter({ status: 'pending' }, '-created_date'),
-    enabled: canModerate,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('knowledge_edit_suggestions').select('*').eq('status', 'pending').order('created_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: Boolean(canModerate),
   });
 
   // Fetch contributor applications
   const { data: applications = [] } = useQuery({
     queryKey: ['admin-contributor-applications'],
-    queryFn: () => base44.entities.contributorapplications.filter({ contributor_status: 'pending_approval' }, '-application_date'),
-    enabled: canModerate,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('contributorapplications').select('*').eq('contributor_status', 'pending_approval').order('application_date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: Boolean(canModerate),
   });
 
   // Approve post mutation with category counter update
   const approvePostMutation = useMutation({
     mutationFn: async (postId) => {
-      const posts = await base44.entities.KnowledgePost.filter({ id: postId });
-      const post = posts[0];
+      const { data: posts, error: postErr } = await supabase.from('knowledge').select('*').eq('id', postId).limit(1);
+      if (postErr) throw postErr;
+      const post = posts && posts[0];
 
-      await base44.entities.KnowledgePost.update(postId, {
-        status: 'approved',
-        published_date: new Date().toISOString()
-      });
+      const { error: approveErr } = await supabase.from('knowledge').update({ status: 'approved', published_date: new Date().toISOString() }).eq('id', postId);
+      if (approveErr) throw approveErr;
 
       // Update category post_count
-      if (post.category_id) {
-        const categories = await base44.entities.KnowledgeCategory.filter({ id: post.category_id });
-        if (categories.length > 0) {
+      if (post?.category_id) {
+        const { data: categories, error: catErr } = await supabase.from('knowledge_categories').select('*').eq('id', post.category_id).limit(1);
+        if (catErr) throw catErr;
+        if (categories && categories.length > 0) {
           const category = categories[0];
-          await base44.entities.KnowledgeCategory.update(post.category_id, {
-            post_count: (category.post_count || 0) + 1
-          });
+          const { error: updCatErr } = await supabase.from('knowledge_categories').update({ post_count: (category.post_count || 0) + 1 }).eq('id', post.category_id);
+          if (updCatErr) throw updCatErr;
         }
       }
 
       // Update contributor post_count
-      if (post.author_email) { // Added check for author_email
-        const profiles = await base44.entities.contributorapplications.filter({ user_email: post.author_email });
-        if (profiles.length > 0) {
+      if (post?.author_email) {
+        const { data: profiles, error: profErr } = await supabase.from('contributorapplications').select('*').eq('user_email', post.author_email).limit(1);
+        if (profErr) throw profErr;
+        if (profiles && profiles.length > 0) {
           const profile = profiles[0];
-          await base44.entities.contributorapplications.update(profile.id, {
-            post_count: (profile.post_count || 0) + 1
-          });
+          const { error: updProfErr } = await supabase.from('contributorapplications').update({ post_count: (profile.post_count || 0) + 1 }).eq('id', profile.id);
+          if (updProfErr) throw updProfErr;
         }
       }
     },
@@ -142,10 +171,8 @@ export default function AdminKnowledge() {
   // Reject post mutation
   const rejectPostMutation = useMutation({
     mutationFn: async ({ postId, notes }) => {
-      await base44.entities.KnowledgePost.update(postId, {
-        status: 'rejected',
-        moderation_notes: notes
-      });
+      const { error } = await supabase.from('knowledge').update({ status: 'rejected', moderation_notes: notes }).eq('id', postId);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-pending-posts'] });
@@ -157,7 +184,10 @@ export default function AdminKnowledge() {
 
   // Approve comment mutation
   const approveCommentMutation = useMutation({
-    mutationFn: (commentId) => base44.entities.KnowledgeComment.update(commentId, { status: 'approved' }),
+    mutationFn: async (commentId) => {
+      const { error } = await supabase.from('knowledge_comments').update({ status: 'approved' }).eq('id', commentId);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-pending-comments'] });
       addSuccess('Comment approved!');
@@ -166,7 +196,10 @@ export default function AdminKnowledge() {
 
   // Reject comment mutation
   const rejectCommentMutation = useMutation({
-    mutationFn: (commentId) => base44.entities.KnowledgeComment.update(commentId, { status: 'rejected' }),
+    mutationFn: async (commentId) => {
+      const { error } = await supabase.from('knowledge_comments').update({ status: 'rejected' }).eq('id', commentId);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-pending-comments'] });
       addSuccess('Comment rejected');
@@ -177,23 +210,26 @@ export default function AdminKnowledge() {
   const approveEditMutation = useMutation({
     mutationFn: async (suggestion) => {
       // Get current post
-      const posts = await base44.entities.KnowledgePost.filter({ id: suggestion.post_id });
-      const post = posts[0];
+      const { data: posts, error: postErr } = await supabase.from('knowledge').select('*').eq('id', suggestion.post_id).limit(1);
+      if (postErr) throw postErr;
+      const post = posts && posts[0];
 
-      // Get current version number
-      const versions = await base44.entities.KnowledgePostVersion.filter({ post_id: suggestion.post_id }, '-version_number');
-      const newVersionNumber = versions.length > 0 ? versions[0].version_number + 1 : 1;
+      // Get highest version number
+      const { data: versions, error: verErr } = await supabase.from('knowledge_post_versions').select('*').eq('post_id', suggestion.post_id).order('version_number', { ascending: false }).limit(1);
+      if (verErr) throw verErr;
+      const newVersionNumber = (versions && versions[0]) ? versions[0].version_number + 1 : 1;
 
       // Update post
-      await base44.entities.KnowledgePost.update(suggestion.post_id, {
+      const { error: updPostErr } = await supabase.from('knowledge').update({
         title: suggestion.suggested_title || post.title,
         content: suggestion.suggested_content,
         excerpt: suggestion.suggested_excerpt || post.excerpt,
         last_edited_date: new Date().toISOString()
-      });
+      }).eq('id', suggestion.post_id);
+      if (updPostErr) throw updPostErr;
 
       // Create new version
-      await base44.entities.KnowledgePostVersion.create({
+      const { error: createVerErr } = await supabase.from('knowledge_post_versions').insert([{
         post_id: suggestion.post_id,
         version_number: newVersionNumber,
         title: suggestion.suggested_title || post.title,
@@ -203,14 +239,12 @@ export default function AdminKnowledge() {
         editor_name: suggestion.suggester_name,
         edit_summary: suggestion.edit_summary,
         change_type: suggestion.edit_type
-      });
+      }]);
+      if (createVerErr) throw createVerErr;
 
       // Update suggestion status
-      await base44.entities.KnowledgeEditSuggestion.update(suggestion.id, {
-        status: 'approved',
-        merged_as_version: newVersionNumber,
-        reviewed_date: new Date().toISOString()
-      });
+      const { error: updSugErr } = await supabase.from('knowledge_edit_suggestions').update({ status: 'approved', merged_as_version: newVersionNumber, reviewed_date: new Date().toISOString() }).eq('id', suggestion.id);
+      if (updSugErr) throw updSugErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-edit-suggestions'] });
@@ -225,35 +259,40 @@ export default function AdminKnowledge() {
   // Reject edit suggestion
   const rejectEditMutation = useMutation({
     mutationFn: async ({ suggestionId, notes }) => {
-      await base44.entities.KnowledgeEditSuggestion.update(suggestionId, {
-        status: 'rejected',
-        reviewer_notes: notes,
-        reviewed_date: new Date().toISOString()
-      });
+      const { error } = await supabase.from('knowledge_edit_suggestions').update({ status: 'rejected', moderation_notes: notes, reviewed_date: new Date().toISOString() }).eq('id', suggestionId);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-edit-suggestions'] });
       addSuccess('Edit suggestion rejected');
+      setSelectedItem(null);
+    },
+    onError: (error) => {
+      addError('Failed to reject suggestion: ' + error.message);
     }
   });
 
   // Approve contributor application
   const approveApplicationMutation = useMutation({
-    mutationFn: (profileId) => base44.entities.contributorapplications.update(profileId, {
-      contributor_status: 'approved',
-      approval_date: new Date().toISOString(),
-      role: 'contributor'
-    }),
+    mutationFn: async (applicationId) => {
+      const { data: apps, error: appErr } = await supabase.from('contributorapplications').select('*').eq('id', applicationId).limit(1);
+      if (appErr) throw appErr;
+      const app = apps && apps[0];
+      if (!app) throw new Error('Application not found');
+
+      const { error: updErr } = await supabase.from('contributorapplications').update({ contributor_status: 'approved', approved_date: new Date().toISOString() }).eq('id', applicationId);
+      if (updErr) throw updErr;
+
+      // Optionally, you might want to update a profiles table or grant role elsewhere.
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-contributor-applications'] });
-      addSuccess('Application approved! User can now subscribe to become a contributor.');
+      addSuccess('Application approved');
+    },
+    onError: (error) => {
+      addError('Failed to approve application: ' + error.message);
     }
   });
-
-  const filteredPosts = allPosts.filter(post =>
-    post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    post.author_name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   if (!currentUser || !canModerate) {
     // Show a loading state or access denied message while data is being fetched

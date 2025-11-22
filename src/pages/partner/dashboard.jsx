@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { createPageUrl } from '@/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -28,17 +29,22 @@ export default function PartnerDashboard() {
 
   const { data: user } = useQuery({
     queryKey: ['current-user'],
-    queryFn: () => base44.auth.me()
+    queryFn: async () => {
+      const { data: userData, error } = await supabase.auth.getUser();
+      if (error) return null;
+      const user = userData?.user;
+      if (!user) return null;
+      return { id: user.id, email: user.email, role: user.user_metadata?.role };
+    }
   });
 
   const { data: partner } = useQuery({
     queryKey: ['my-partner-profile'],
     queryFn: async () => {
-      const currentUser = await base44.auth.me();
-      const partners = await base44.entities.BusinessPartner.filter({ 
-        contact_email: currentUser.email 
-      });
-      return partners[0];
+      if (!user?.email) return null;
+      const { data: partners, error } = await supabase.from('business_partners').select('*').eq('contact_email', user.email).limit(1);
+      if (error) throw error;
+      return (partners && partners[0]) || null;
     },
     enabled: !!user
   });
@@ -46,25 +52,30 @@ export default function PartnerDashboard() {
   const { data: services = [] } = useQuery({
     queryKey: ['my-services'],
     queryFn: async () => {
-      const currentPartner = await base44.entities.BusinessPartner.filter({ 
-        contact_email: user.email 
-      });
-      if (currentPartner[0]) {
-        return base44.entities.PartnerService.filter({ partner_id: currentPartner[0].id });
-      }
-      return [];
+      if (!partner?.id) return [];
+      const { data, error } = await supabase.from('partner_services').select('*').eq('partner_id', partner.id);
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!partner
   });
 
   const { data: myLeads = [] } = useQuery({
     queryKey: ['my-leads'],
-    queryFn: () => base44.entities.LeadRequest.filter({ partner_id: partner.id }),
+    queryFn: async () => {
+      if (!partner?.id) return [];
+      const { data, error } = await supabase.from('lead_requests').select('*').eq('partner_id', partner.id);
+      if (error) throw error;
+      return data || [];
+    },
     enabled: !!partner
   });
 
   const createServiceMutation = useMutation({
-    mutationFn: (data) => base44.entities.PartnerService.create(data),
+    mutationFn: async (data) => {
+      const { error } = await supabase.from('partner_services').insert([data]);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-services'] });
       setShowServiceDialog(false);
@@ -73,7 +84,10 @@ export default function PartnerDashboard() {
   });
 
   const updateServiceMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.PartnerService.update(id, data),
+    mutationFn: async ({ id, data }) => {
+      const { error } = await supabase.from('partner_services').update(data).eq('id', id);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-services'] });
       setShowServiceDialog(false);
@@ -82,7 +96,10 @@ export default function PartnerDashboard() {
   });
 
   const updateLeadMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.LeadRequest.update(id, data),
+    mutationFn: async ({ id, data }) => {
+      const { error } = await supabase.from('lead_requests').update(data).eq('id', id);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-leads'] });
     }

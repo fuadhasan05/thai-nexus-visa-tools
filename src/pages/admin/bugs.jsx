@@ -20,11 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-export const getStaticProps = async () => {
-  return {
-    notFound: true,
-  };
-};
+// removed getStaticProps stub so admin page renders at runtime
 export default function AdminBugs() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');

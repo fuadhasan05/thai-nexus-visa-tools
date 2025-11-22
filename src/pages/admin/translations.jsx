@@ -10,11 +10,7 @@ import { Globe, Search, Edit, Save, X, CheckCircle2, AlertCircle, Loader2 } from
 import GlassCard from '../../components/GlassCard';
 import { useError } from '../../components/ErrorNotification';
 
-export const getStaticProps = async () => {
-  return {
-    notFound: true,
-  };
-};
+// removed getStaticProps stub so admin page renders at runtime
 export default function AdminTranslations() {
   const [searchQuery, setSearchQuery] = useState('');
   const [languageFilter, setLanguageFilter] = useState('all');
@@ -29,7 +25,21 @@ export default function AdminTranslations() {
   // Check admin access first
   const { data: currentUser } = useQuery({
     queryKey: ['current-user-admin'],
-    queryFn: () => base44.auth.me()
+    queryFn: async () => {
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      const user = userData?.user;
+      if (!user) return null;
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (profileErr) {
+        return { id: user.id, email: user.email };
+      }
+      return profile;
+    }
   });
 
   const isAdmin = currentUser?.role === 'admin';
@@ -50,14 +60,20 @@ export default function AdminTranslations() {
   const { data: translations = [], isLoading } = useQuery({
     queryKey: ['all-translations'],
     queryFn: async () => {
-      return base44.entities.Translation.list('-updated_date', 500);
+      const { data, error } = await supabase
+        .from('Translation')
+        .select('*')
+        .order('updated_date', { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return data || [];
     },
     initialData: []
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, translated_content }) => {
-      return base44.entities.Translation.update(id, { translated_content });
+      return supabase.from('Translation').update({ translated_content }).eq('id', id).select().single();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-translations'] });
@@ -74,7 +90,7 @@ export default function AdminTranslations() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: (id) => {
-      return base44.entities.Translation.delete(id);
+      return supabase.from('Translation').delete().eq('id', id).select();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-translations'] });
@@ -129,23 +145,31 @@ ${JSON.stringify(translation.content_block, null, 2)}
 Return ONLY the fully translated JSON object with NO English.`;
 
         try {
-          const response = await base44.functions.invoke('translate', {
-            prompt,
-            response_json_schema: {
-              type: "object",
-              properties: {
-                translated_content: {
-                  type: "object",
-                  additionalProperties: true
+          const { data: fnData, error: fnError } = await supabase.functions.invoke('translate', {
+            body: JSON.stringify({
+              prompt,
+              response_json_schema: {
+                type: 'object',
+                properties: {
+                  translated_content: {
+                    type: 'object',
+                    additionalProperties: true
+                  }
                 }
               }
-            }
+            })
           });
-  
-          await base44.entities.Translation.update(translation.id, {
-            translated_content: response.data.translated_content,
-            quality_score: 100
-          });
+
+          if (fnError) throw fnError;
+
+          const translated = fnData?.translated_content;
+
+          const { error: updErr } = await supabase
+            .from('Translation')
+            .update({ translated_content: translated, quality_score: 100 })
+            .eq('id', translation.id);
+
+          if (updErr) throw updErr;
 
           addLog(`Fixed translation: ${translation.page_name}:${translation.section_context} (${targetLanguageName})`);
         } catch (error) {
@@ -182,8 +206,12 @@ Return ONLY the fully translated JSON object with NO English.`;
       const englishTranslationsToDelete = translations.filter(t => t.target_language === 'en');
       
       for (const trans of englishTranslationsToDelete) {
-        await base44.entities.Translation.delete(trans.id);
-        issues.push(`Deleted English→English translation: ${trans.page_name}:${trans.section_context}`);
+        const { error: delErr } = await supabase.from('Translation').delete().eq('id', trans.id);
+        if (!delErr) {
+          issues.push(`Deleted English→English translation: ${trans.page_name}:${trans.section_context}`);
+        } else {
+          issues.push(`Failed to delete: ${trans.page_name}:${trans.section_context} - ${delErr.message}`);
+        }
       }
       
       // Additional checks could be added here if needed, e.g., missing content_block, etc.

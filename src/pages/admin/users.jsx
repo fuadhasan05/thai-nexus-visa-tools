@@ -37,11 +37,6 @@ const createPageUrl = (pageName, params = {}) => {
 };
 
 
-export const getStaticProps = async () => {
-  return {
-    notFound: true,
-  };
-};
 export default function AdminUsers() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -57,46 +52,47 @@ export default function AdminUsers() {
   const { confirm } = useConfirm();
   const queryClient = useQueryClient();
 
-  // Fetch all users
-  const { data: users = [] } = useQuery({
-    queryKey: ['all-users'],
-    queryFn: () => base44.entities.User.list('-created_date')
+  // Fetch all account profiles (used as user list)
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['all-accounts'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    }
   });
 
   // Fetch all contributor profiles
   const { data: profiles = [] } = useQuery({
     queryKey: ['all-profiles'],
-    queryFn: () => base44.entities.contributorapplications.list('-created_date')
+    queryFn: async () => {
+      const { data, error } = await supabase.from('contributorapplications').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    }
   });
 
-  // Add query for vote statistics
+  // Basic vote statistics derived from PostUpvote and UserReputation tables
   const { data: voteStats } = useQuery({
     queryKey: ['vote-statistics'],
     queryFn: async () => {
-      const activities = await base44.entities.VoteActivity.filter({}, '-created_date', 1000);
-      const rateLimits = await base44.entities.VoteRateLimit.filter({});
-
-      const flaggedVotes = activities.filter(a => a.flagged_as_suspicious);
-      const bannedUsers = rateLimits.filter(r => r.is_banned);
-      const usersOnCooldown = rateLimits.filter(r =>
-        r.cooldown_until && new Date(r.cooldown_until) > new Date()
-      );
+      const { data: upvotes = [], error: upErr } = await supabase.from('PostUpvote').select('*');
+      if (upErr) throw upErr;
+      const { data: reps = [], error: repErr } = await supabase.from('UserReputation').select('*');
+      if (repErr) throw repErr;
 
       return {
-        total_votes: activities.length,
-        flagged_votes: flaggedVotes.length,
-        banned_users: bannedUsers.length,
-        users_on_cooldown: usersOnCooldown.length,
-        recent_suspicious: activities.filter(a =>
-          a.spam_score >= 50 &&
-          new Date(a.created_date) > new Date(Date.now() - 86400000)
-        )
+        total_votes: upvotes.length,
+        flagged_votes: 0,
+        banned_users: reps.filter(r => (r.reputation_points || 0) < 0).length,
+        users_on_cooldown: 0,
+        recent_suspicious: []
       };
     }
   });
 
-  // Combine users with their profiles
-  const combinedUsers = users.map(user => {
+  // Combine accounts with their contributor profiles
+  const combinedUsers = accounts.map(user => {
     const profile = profiles.find(p => p.user_email === user.email);
     return {
       ...user,
@@ -127,14 +123,18 @@ export default function AdminUsers() {
   const updateProfileMutation = useMutation({
     mutationFn: async ({ profileId, data }) => {
       if (profileId) {
-        return await base44.entities.contributorapplications.update(profileId, data);
+        const { data: updated, error } = await supabase.from('contributorapplications').update(data).eq('id', profileId).select();
+        if (error) throw error;
+        return updated;
       } else {
-        return await base44.entities.contributorapplications.create(data);
+        const { data: created, error } = await supabase.from('contributorapplications').insert(data).select();
+        if (error) throw error;
+        return created;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-profiles'] });
-      queryClient.invalidateQueries({ queryKey: ['all-users'] });
+      queryClient.invalidateQueries({ queryKey: ['all-accounts'] });
       addSuccess('Profile updated successfully');
       setShowDialog(false);
       setEditingProfile(null);
@@ -146,9 +146,14 @@ export default function AdminUsers() {
 
   // Delete profile mutation
   const deleteProfileMutation = useMutation({
-    mutationFn: (profileId) => base44.entities.contributorapplications.delete(profileId),
+    mutationFn: async (profileId) => {
+      const { data: deleted, error } = await supabase.from('contributorapplications').delete().eq('id', profileId).select();
+      if (error) throw error;
+      return deleted;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-profiles'] });
+      queryClient.invalidateQueries({ queryKey: ['all-accounts'] });
       addSuccess('Profile deleted successfully');
     },
     onError: (error) => {
@@ -159,10 +164,9 @@ export default function AdminUsers() {
   // Update mutation to reset all voting data - now uses backend function
   const resetVotingMutation = useMutation({
     mutationFn: async () => {
-      const response = await base44.functions.invoke('adminOperations', {
-        operation: 'reset_votes'
-      });
-      return response.data;
+      const res = await supabase.functions.invoke('adminOperations', { body: JSON.stringify({ operation: 'reset_votes' }) });
+      if (res?.error) throw res.error;
+      return res?.data ?? res;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries();
@@ -176,10 +180,9 @@ export default function AdminUsers() {
   // Update mutation to fix user/profile mismatches - now uses backend function
   const syncProfilesMutation = useMutation({
     mutationFn: async () => {
-      const response = await base44.functions.invoke('adminOperations', {
-        operation: 'sync_profiles'
-      });
-      return response.data;
+      const res = await supabase.functions.invoke('adminOperations', { body: JSON.stringify({ operation: 'sync_profiles' }) });
+      if (res?.error) throw res.error;
+      return res?.data ?? res;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries();

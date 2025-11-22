@@ -25,11 +25,7 @@ function generateSlug(title) {
     .substring(0, 100); // Limit length
 }
 
-export const getStaticProps = async () => {
-  return {
-    notFound: true,
-  };
-};
+// removed getStaticProps stub so admin page renders at runtime
 export default function AdminKnowledgeEdit() {
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams('');
   const postId = urlParams.get('id');
@@ -47,7 +43,11 @@ export default function AdminKnowledgeEdit() {
     queryKey: ['current-user'],
     queryFn: async () => {
       try {
-        return await base44.auth.me();
+        const { data: userData, error: userErr } = await supabase.auth.getUser();
+        if (userErr) return null;
+        const user = userData?.user;
+        if (!user) return null;
+        return { id: user.id, email: user.email, role: user.user_metadata?.role };
       } catch {
         return null;
       }
@@ -61,67 +61,18 @@ export default function AdminKnowledgeEdit() {
     queryKey: ['user-profile', currentUser?.email],
     queryFn: async () => {
       if (!currentUser?.email) return null;
-      const profiles = await base44.entities.contributorapplications.filter({ user_email: currentUser.email });
-      return profiles[0];
+      const { data, error } = await supabase.from('contributorapplications').select('*').eq('user_email', currentUser.email).limit(1);
+      if (error) throw error;
+      return (data && data[0]) || null;
     },
     enabled: !!currentUser?.email,
     staleTime: 5 * 60 * 1000, // 5 minutes
     cacheTime: 10 * 60 * 1000, // 10 minutes
   });
 
-  // Check if user can moderate - FIXED: Also check User entity role
-  const canModerate = currentUser?.role === 'admin' || (userProfile && ['moderator', 'admin'].includes(userProfile.role));
-
-  // Redirect non-moderators
-  React.useEffect(() => {
-    // Only redirect if currentUser is loaded and userProfile has been fetched
-    // and currentUser is not null (i.e., logged in) and they can't moderate.
-    if (!isLoadingCurrentUser && !isLoadingUserProfile && currentUser && !canModerate) {
-      addError('Access restricted: Only moderators and admins can edit knowledge posts.');
-      window.location.href = createPageUrl('KnowledgeHub');
-    }
-  }, [currentUser, canModerate, userProfile, isLoadingCurrentUser, isLoadingUserProfile, addError]);
-
-  // Fetch post
-  const { data: post, isLoading: isLoadingPost } = useQuery({
-    queryKey: ['admin-edit-post', postId],
-    queryFn: async () => {
-      const posts = await base44.entities.KnowledgePost.filter({ id: postId });
-      if (posts.length === 0) throw new Error('Post not found');
-      return posts[0];
-    },
-    enabled: !!postId && canModerate // Only enable if user can moderate
-  });
-
-  // Fetch categories
-  const { data: categories = [], isLoading: isLoadingCategories } = useQuery({
-    queryKey: ['admin-categories'],
-    queryFn: () => base44.entities.KnowledgeCategory.filter({ is_active: true }, 'sort_order'),
-    enabled: canModerate // Only enable if user can moderate
-  });
-
-  // Initialize form data when post loads
-  React.useEffect(() => {
-    if (post && !formData) {
-      setFormData({
-        title: post.title,
-        content: post.content,
-        excerpt: post.excerpt,
-        category_id: post.category_id,
-        status: post.status,
-        tags: post.tags || [], // Added tags
-        difficulty_level: post.difficulty_level || '', // Added difficulty_level
-        featured: post.featured || false, // Added featured
-        meta_title: post.meta_title || '',
-        meta_description: post.meta_description || '',
-        meta_keywords: post.meta_keywords || ''
-      });
-    }
-  }, [post, formData]);
-
-  // Generate with AI
+  // Generate with AI (content & SEO) using Supabase Edge Function
   const handleAIGenerate = async (type) => {
-    if (!formData.title) {
+    if (!formData?.title && type === 'content') {
       addError('Please enter a title first');
       return;
     }
@@ -129,154 +80,26 @@ export default function AdminKnowledgeEdit() {
     setAiGenerating(true);
     try {
       if (type === 'content') {
-        const response = await base44.functions.invoke('invokeOpenAI', {
-          prompt: `You are a Thailand visa expert writing for Thai Nexus Knowledge Hub.
-
-TASK: Create a COMPLETE, COMPREHENSIVE article for this question/title:
-"${formData.title}"
-
-CRITICAL: You MUST generate BOTH:
-1. Full article content (800-1500 words minimum)
-2. Short excerpt (150-160 characters)
-
-FORMATTING REQUIREMENTS - USE THESE EXACT HTML TAGS:
-
-STRUCTURE:
-- Start with <p>brief 2-3 sentence introduction</p>
-- Use <h2>Main Section Heading</h2> for primary sections (at least 3-5 sections)
-- Use <h3>Subsection Heading</h3> for subsections under H2
-- Keep paragraphs SHORT: <p>2-3 sentences maximum per paragraph</p>
-- Use <ul><li>bullet item</li><li>bullet item</li></ul> for lists
-- Use <ol><li>step 1</li><li>step 2</li></ol> for numbered steps
-
-EMPHASIS:
-- Use <strong>bold text</strong> for amounts, deadlines, requirements (e.g., <strong>800,000 THB</strong>)
-- Use <em>italic</em> for emphasis
-- Use <blockquote>WARNING or important note</blockquote> for critical info
-- Use <code>TM.7</code> for form numbers and fees (e.g., <code>1,900 THB</code>)
-
-CONTENT REQUIREMENTS:
-- Write in second person ("you need", "your passport")
-- Include SPECIFIC numbers: fees in THB, timeframes, ages
-- Provide ACTIONABLE steps with <ol> numbered lists
-- Add WARNINGS in <blockquote> about common mistakes
-- End with note about Thai Nexus assistance
-
-EXAMPLE ARTICLE STRUCTURE:
-
-<p>Introduction paragraph explaining the visa/process and who needs it. Keep it brief and engaging.</p>
-
-<h2>Who Qualifies for This Visa?</h2>
-<p>To apply for this visa, you must meet these requirements:</p>
-<ul>
-<li><strong>Age:</strong> Must be 50 years or older</li>
-<li><strong>Financial:</strong> <code>800,000 THB</code> in Thai bank OR <code>65,000 THB</code>/month pension</li>
-<li><strong>Health Insurance:</strong> Coverage of <code>40,000 THB</code> outpatient and <code>400,000 THB</code> inpatient</li>
-</ul>
-
-<h2>Required Documents</h2>
-<p>Gather these documents before visiting the immigration office:</p>
-<ul>
-<li>Valid passport (18+ months remaining validity)</li>
-<li>Bank statements (last 6 months)</li>
-<li>Health insurance certificate</li>
-<li><strong>2 passport photos</strong> (4x6cm, white background - NOT regular passport size)</li>
-</ul>
-
-<blockquote>
-<strong>IMPORTANT:</strong> Photo requirements are strict. Immigration offices reject applications for incorrect photo sizes. Use exactly 4x6cm with white background.
-</blockquote>
-
-<h2>Step-by-Step Application Process</h2>
-<p>Follow these steps to apply successfully:</p>
-
-<h3>Step 1: Prepare Your Documents</h3>
-<ol>
-<li>Visit your bank and request an updated bank book stamped SAME DAY as application</li>
-<li>Get a bank letter dated within 7 days of application</li>
-<li>Fill out form <code>TM.7</code> completely (download from immigration website or get at office)</li>
-<li>Make photocopies of all passport pages (data page, visa, stamps) and SIGN each copy</li>
-</ol>
-
-<h3>Step 2: Visit Immigration Office</h3>
-<ol>
-<li>Arrive early (before 9 AM) to avoid 2-3 hour queues</li>
-<li>Go to document check desk first</li>
-<li>Officer reviews your folder - if complete, you receive queue number</li>
-<li>Wait for your number to be called (usually 30-120 minutes)</li>
-</ol>
-
-<h3>Step 3: Interview and Payment</h3>
-<ol>
-<li>Approach desk when called</li>
-<li>Officer asks simple questions: "Where do you live?" "What type of visa?"</li>
-<li>Sign forms where indicated</li>
-<li>Pay <code>1,900 THB</code> fee in CASH ONLY (most offices don't accept cards)</li>
-<li>Take photo at desk</li>
-</ol>
-
-<h3>Step 4: Receive Stamp</h3>
-<p>Officer stamps your passport with 1-year extension. Double-check the dates before leaving the office.</p>
-
-<h2>Common Mistakes to Avoid</h2>
-<ul>
-<li><strong>Incorrect photo size:</strong> Must be 4x6cm, NOT standard passport size (3.5x4.5cm)</li>
-<li><strong>Bank book not updated same day:</strong> Get stamp from bank on application day</li>
-<li><strong>Expired bank letter:</strong> Must be dated within 7 days</li>
-<li><strong>Unsigned photocopies:</strong> Sign ALL copies of passport pages</li>
-<li><strong>Missing TM.30:</strong> Ensure landlord filed this within 24 hours of your arrival</li>
-</ul>
-
-<h2>Processing Time and Fees</h2>
-<ul>
-<li><strong>Processing:</strong> Same day (most offices) or 15-30 days (some offices)</li>
-<li><strong>Extension fee:</strong> <code>1,900 THB</code> (cash only)</li>
-<li><strong>Re-entry permit:</strong> <code>1,000 THB</code> (single) or <code>3,800 THB</code> (multiple) if traveling</li>
-</ul>
-
-<h2>What Happens Next?</h2>
-<p>After approval, you receive a 1-year extension stamp in your passport. Remember these ongoing requirements:</p>
-<ul>
-<li><strong>90-Day Report:</strong> File <code>TM.47</code> every 90 days (online or in-person)</li>
-<li><strong>Annual Extension:</strong> Apply for renewal 45 days before expiration</li>
-<li><strong>Address Notification:</strong> TM.30 must be filed every time you change address or return from travel</li>
-<li><strong>Bank Balance:</strong> Maintain <code>800,000 THB</code> for at least 3 months after extension, cannot drop below <code>400,000 THB</code> rest of year</li>
-</ul>
-
-<blockquote>
-<strong>Need Professional Help?</strong> Thai Nexus can handle your entire visa application process, from document preparation to immigration office visit. Contact us: +66923277723 (WhatsApp) or contact@thainexus.co.th
-</blockquote>
-
-NOW WRITE THE ACTUAL ARTICLE FOLLOWING THIS EXACT FORMAT.
-
-Return as JSON:
-{
-  "content": "FULL HTML article with ALL sections, at least 800 words",
-  "excerpt": "150-160 character summary"
-}`,
-          response_json_schema: {
-            type: "object",
-            properties: {
-              content: { 
-                type: "string", 
-                description: "Complete HTML article with h2, h3, p, ul, ol, li, strong, em, blockquote, code tags. Minimum 800 words."
+        const response = await supabase.functions.invoke('invokeOpenAI', {
+          body: JSON.stringify({
+            prompt: `You are a Thailand visa expert writing for Thai Nexus Knowledge Hub.\n\nTASK: Create a COMPLETE, COMPREHENSIVE article for this question/title:\n\"${formData.title}\"\n\nCRITICAL: You MUST generate BOTH: (content and excerpt)\n`,
+            response_json_schema: {
+              type: 'object',
+              properties: {
+                content: { type: 'string' },
+                excerpt: { type: 'string' }
               },
-              excerpt: { 
-                type: "string", 
-                description: "Short 150-160 character summary of the article"
-              }
-            },
-            required: ["content", "excerpt"]
-          }
+              required: ['content', 'excerpt']
+            }
+          })
         });
 
-        console.log('AI Content Response:', response.data);
-
-        if (response.data && response.data.content) {
+        const data = response?.data || response;
+        if (data && data.content) {
           setFormData({
             ...formData,
-            content: response.data.content,
-            excerpt: response.data.excerpt || formData.excerpt
+            content: data.content,
+            excerpt: data.excerpt || formData.excerpt
           });
           addSuccess('Content generated successfully!');
         } else {
@@ -290,87 +113,28 @@ Return as JSON:
         }
 
         const contentText = formData.content.replace(/<[^>]*>/g, ' ').substring(0, 2000);
-        const response = await base44.functions.invoke('invokeOpenAI', {
-          prompt: `You are an SEO expert specializing in Thailand visa content.
-
-TASK: Generate SEO metadata for this article.
-
-Article Title: "${formData.title}"
-Excerpt: "${formData.excerpt}"
-Content Preview: "${contentText}"
-
-Generate THREE specific items:
-
-1. **meta_title** (50-60 characters, NOT LONGER):
-   - Must include main keyword + "Thailand" or "Thai"
-   - Format options:
-     * "[Main Keyword] Thailand | Thai Nexus"
-     * "How to [Action] in Thailand | Complete Guide"
-     * "[Visa Type] Requirements Thailand 2025"
-   - Examples:
-     * "Retirement Visa Thailand Guide 2025 | Requirements"
-     * "How to Apply for DTV Thailand | Complete Process"
-     * "Thailand 90-Day Report Guide | TM.47 Instructions"
-
-2. **meta_description** (150-160 characters, NOT SHORTER):
-   - Must be EXACTLY 150-160 characters
-   - Include: benefit + keyword + call-to-action
-   - Use power words: "complete", "step-by-step", "expert", "detailed", "2025"
-   - Examples:
-     * "Complete guide to Thailand retirement visa 2025: requirements, costs, step-by-step application process. Expert assistance available. Get your visa approved fast."
-     * "Learn how to file TM.47 90-day report in Thailand. Step-by-step instructions, deadlines, online filing guide. Avoid penalties. Expert help available 24/7."
-
-3. **meta_keywords** (5-8 keywords, comma-separated):
-   - Use long-tail keywords expats actually search
-   - Include:
-     * Main visa type/process
-     * Location-specific terms (Thailand, Hua Hin, Bangkok, etc.)
-     * Year (2025)
-     * Common variations
-     * Cost/requirement terms
-   - Examples:
-     * "thailand retirement visa 2025, non-o visa requirements, retire in thailand cost, hua hin immigration office, visa extension thailand process"
-     * "thailand 90 day report, TM.47 form online, immigration reporting thailand, avoid overstay penalties thailand"
-
-REQUIREMENTS:
-- meta_title: EXACTLY 50-60 characters
-- meta_description: EXACTLY 150-160 characters  
-- meta_keywords: 5-8 relevant long-tail keywords
-
-Return ONLY valid JSON:
-{
-  "meta_title": "exact title 50-60 chars",
-  "meta_description": "exact description 150-160 chars",
-  "meta_keywords": "keyword1, keyword2, keyword3, keyword4, keyword5"
-}`,
-          response_json_schema: {
-            type: "object",
-            properties: {
-              meta_title: { 
-                type: "string",
-                description: "SEO title 50-60 characters including primary keyword and Thailand"
+        const response = await supabase.functions.invoke('invokeOpenAI', {
+          body: JSON.stringify({
+            prompt: `You are an SEO expert specializing in Thailand visa content.\n\nTASK: Generate SEO metadata for this article.\nArticle Title: \"${formData.title}\"\nExcerpt: \"${formData.excerpt}\"\nContent Preview: \"${contentText}\"`,
+            response_json_schema: {
+              type: 'object',
+              properties: {
+                meta_title: { type: 'string' },
+                meta_description: { type: 'string' },
+                meta_keywords: { type: 'string' }
               },
-              meta_description: { 
-                type: "string",
-                description: "SEO description 150-160 characters with call-to-action"
-              },
-              meta_keywords: { 
-                type: "string",
-                description: "5-8 comma-separated long-tail keywords"
-              }
-            },
-            required: ["meta_title", "meta_description", "meta_keywords"]
-          }
+              required: ['meta_title', 'meta_description', 'meta_keywords']
+            }
+          })
         });
 
-        console.log('AI SEO Response:', response.data);
-
-        if (response.data && response.data.meta_title && response.data.meta_description && response.data.meta_keywords) {
+        const data = response?.data || response;
+        if (data && data.meta_title && data.meta_description && data.meta_keywords) {
           setFormData({
             ...formData,
-            meta_title: response.data.meta_title,
-            meta_description: response.data.meta_description,
-            meta_keywords: response.data.meta_keywords
+            meta_title: data.meta_title,
+            meta_description: data.meta_description,
+            meta_keywords: data.meta_keywords
           });
           addSuccess('SEO metadata generated successfully!');
         } else {
@@ -380,7 +144,7 @@ Return ONLY valid JSON:
       }
     } catch (error) {
       console.error('AI generation error:', error);
-      addError('AI generation failed: ' + (error.response?.data?.error || error.message || 'Unknown error'));
+      addError('AI generation failed: ' + (error?.message || 'Unknown error'));
     } finally {
       setAiGenerating(false);
     }
@@ -396,17 +160,20 @@ Return ONLY valid JSON:
       let finalSlug = post.slug;
       if (needsNewSlug) {
         // Check if new slug already exists for another post
-        const existing = await base44.entities.KnowledgePost.filter({ slug: newSlug });
-        const slugExists = existing.some(p => p.id !== postId); // Ensure it's not the current post itself
+        const { data: existing, error: existErr } = await supabase.from('knowledge').select('id').eq('slug', newSlug).limit(1);
+        if (existErr) throw existErr;
+        const slugExists = (existing && existing.length > 0 && existing[0].id !== postId);
         finalSlug = slugExists ? `${newSlug}-${Date.now()}` : newSlug;
       }
       
-      return await base44.entities.KnowledgePost.update(postId, {
+      const { error } = await supabase.from('knowledge').update({
         ...data,
         slug: finalSlug,
         last_edited_date: new Date().toISOString(),
         canonical_url: `https://visa.thainexus.co.th/knowledgepost?slug=${finalSlug}`
-      });
+      }).eq('id', postId);
+      if (error) throw error;
+      return true;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['knowledge-post', postId] });
@@ -420,7 +187,10 @@ Return ONLY valid JSON:
 
   // Delete mutation
   const deletePostMutation = useMutation({
-    mutationFn: () => base44.entities.KnowledgePost.delete(postId),
+    mutationFn: async () => {
+      const { error } = await supabase.from('knowledge').delete().eq('id', postId);
+      if (error) throw error;
+    },
     onSuccess: () => {
       addSuccess('Post deleted successfully');
       window.location.href = createPageUrl('AdminKnowledge');

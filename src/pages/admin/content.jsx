@@ -7,14 +7,6 @@ import { Globe, Loader2, CheckCircle2, AlertCircle, Sparkles } from 'lucide-reac
 import GlassCard from '../../components/GlassCard';
 import { useError } from '../../components/ErrorNotification';
 
-export const getStaticProps = async () => {
-  // Do not statically generate this page at build time
-  // It requires base44 which is only available at runtime
-  return {
-    notFound: true,
-  };
-};
-
 export default function AdminContent() {
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationProgress, setTranslationProgress] = useState({ current: 0, total: 0, currentPage: '' });
@@ -25,7 +17,21 @@ export default function AdminContent() {
   // Check admin access
   const { data: currentUser } = useQuery({
     queryKey: ['current-user-admin'],
-    queryFn: () => base44.auth.me()
+    queryFn: async () => {
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      const user = userData?.user;
+      if (!user) return null;
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (profileErr) {
+        return { id: user.id, email: user.email };
+      }
+      return profile;
+    }
   });
 
   const isAdmin = currentUser?.role === 'admin';
@@ -46,7 +52,9 @@ export default function AdminContent() {
   const { data: existingTranslations = [] } = useQuery({
     queryKey: ['all-page-translations'],
     queryFn: async () => {
-      return base44.entities.Translation.list();
+      const { data, error } = await supabase.from('Translation').select('*');
+      if (error) throw error;
+      return data || [];
     },
     initialData: []
   });
@@ -399,30 +407,37 @@ ${JSON.stringify(contentBlock, null, 2)}
 
 Return ONLY the translated JSON object with the same structure.`;
 
-            const response = await base44.functions.invoke('translate', {
-              prompt,
-              response_json_schema: {
-                type: "object",
-                properties: {
-                  translated_content: {
-                    type: "object",
-                    additionalProperties: true
+            const { data: fnData, error: fnError } = await supabase.functions.invoke('translate', {
+              body: JSON.stringify({
+                prompt,
+                response_json_schema: {
+                  type: 'object',
+                  properties: {
+                    translated_content: {
+                      type: 'object',
+                      additionalProperties: true
+                    }
                   }
                 }
+              })
+            });
+
+            if (fnError) throw fnError;
+
+            const translatedContent = fnData?.translated_content || contentBlock;
+
+            const { error: insertErr } = await supabase.from('Translation').insert([
+              {
+                page_name: pageName,
+                section_context: sectionContext,
+                content_block: contentBlock,
+                target_language: langCode,
+                translated_content: translatedContent,
+                translation_key: translationKey,
+                usage_count: 0
               }
-            });
-
-            const translatedContent = response.data.translated_content || contentBlock;
-
-            await base44.entities.Translation.create({
-              page_name: pageName,
-              section_context: sectionContext,
-              content_block: contentBlock,
-              target_language: langCode,
-              translated_content: translatedContent,
-              translation_key: translationKey,
-              usage_count: 0
-            });
+            ]);
+            if (insertErr) throw insertErr;
 
             addLog(`✓ Translated ${pageName}:${sectionContext}`, 'success');
           } catch (error) {

@@ -5,11 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useRouter } from "next/router";
 import { createPageUrl } from '@/utils';
 
-export const getStaticProps = async () => {
-  return {
-    notFound: true,
-  };
-};
+// removed getStaticProps stub so admin page renders at runtime
 export default function AdminPricing() {
   const router = useRouter();
 

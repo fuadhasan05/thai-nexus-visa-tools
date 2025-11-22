@@ -51,11 +51,7 @@ const DEFAULT_PAGES = [
   { name: 'PartnerDashboard', label: 'Partner Dashboard', url: 'partnerdashboard', category: 'private' }
 ];
 
-export const getStaticProps = async () => {
-  return {
-    notFound: true,
-  };
-};
+// Removed getStaticProps that returned notFound to allow runtime rendering of admin pages
 export default function AdminSEO() {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingPage, setEditingPage] = useState(null); // Stores page_name if editing an existing default page
@@ -65,24 +61,36 @@ export default function AdminSEO() {
   const { addError, addSuccess } = useError();
   const queryClient = useQueryClient();
 
-  const { data: seoConfigs = [], isLoading } = useQuery({
+  const { data: seoConfigs = [] } = useQuery({
     queryKey: ['seo-metadata'],
-    queryFn: () => base44.entities.SEOMetadata.list(),
+    queryFn: async () => {
+      const { data, error } = await supabase.from('SEOMetadata').select('*');
+      if (error) throw error;
+      return data || [];
+    }
   });
 
   // Fetch actual approved knowledge posts for accurate counts.
   // Assuming these posts also contribute to the sitemap and can be indexed.
   const { data: knowledgePosts = [] } = useQuery({
     queryKey: ['seo-knowledge-posts-count'],
-    queryFn: () => base44.entities.KnowledgePost.filter({ status: 'approved' }),
+    queryFn: async () => {
+      const { data, error } = await supabase.from('knowledge').select('*').eq('status', 'approved');
+      if (error) throw error;
+      return data || [];
+    }
   });
 
   const saveMutation = useMutation({
     mutationFn: async (data) => {
       if (data.id) {
-        return base44.entities.SEOMetadata.update(data.id, data);
+        const { data: updated, error } = await supabase.from('SEOMetadata').update(data).eq('id', data.id).select();
+        if (error) throw error;
+        return updated;
       } else {
-        return base44.entities.SEOMetadata.create(data);
+        const { data: created, error } = await supabase.from('SEOMetadata').insert(data).select();
+        if (error) throw error;
+        return created;
       }
     },
     onSuccess: () => {
@@ -99,7 +107,9 @@ export default function AdminSEO() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
-      return base44.entities.SEOMetadata.delete(id);
+      const { data: deleted, error } = await supabase.from('SEOMetadata').delete().eq('id', id).select();
+      if (error) throw error;
+      return deleted;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seo-metadata'] });
@@ -112,7 +122,9 @@ export default function AdminSEO() {
 
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, is_active }) => {
-      return base44.entities.SEOMetadata.update(id, { is_active });
+      const { data: updated, error } = await supabase.from('SEOMetadata').update({ is_active }).eq('id', id).select();
+      if (error) throw error;
+      return updated;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seo-metadata'] });
@@ -188,7 +200,7 @@ Requirements:
 
 Generate professional, SEO-optimized content that ranks well on Google for Thailand visa-related searches.`;
 
-      const response = await base44.functions.invoke('invokeOpenAI', {
+      const res = await supabase.functions.invoke('invokeOpenAI', { body: JSON.stringify({
         prompt: prompt,
         response_json_schema: {
           type: "object",
@@ -199,14 +211,15 @@ Generate professional, SEO-optimized content that ranks well on Google for Thail
           },
           required: ["meta_title", "meta_description", "meta_keywords"]
         }
-      });
+      })});
 
-      if (response.data) {
+      const response = res?.data ?? res;
+      if (response) {
         setFormData({
           ...formData,
-          meta_title: response.data.meta_title || '',
-          meta_description: response.data.meta_description || '',
-          meta_keywords: response.data.meta_keywords || ''
+          meta_title: response.meta_title || '',
+          meta_description: response.meta_description || '',
+          meta_keywords: response.meta_keywords || ''
         });
         addSuccess('AI-generated SEO metadata successfully!');
       } else {

@@ -24,11 +24,19 @@ export default function AdminManager() {
   const { data: user } = useQuery({
     queryKey: ['current-user'],
     queryFn: async () => {
-      try {
-        return await base44.auth.me();
-      } catch (error) {
-        return null;
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr) return null;
+      const user = userData?.user;
+      if (!user) return null;
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (profileErr) {
+        return { id: user.id, email: user.email };
       }
+      return profile;
     },
     retry: false
   });
@@ -37,7 +45,9 @@ export default function AdminManager() {
     queryKey: ['ninety-day-reports', user?.email],
     queryFn: async () => {
       if (!user?.email) return [];
-      return base44.entities.NinetyDayReport.filter({ user_email: user.email });
+      const { data, error } = await supabase.from('ninety_day_reports').select('*').eq('user_email', user.email);
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!user?.email
   });
@@ -46,14 +56,15 @@ export default function AdminManager() {
     mutationFn: async (date) => {
       const deadline = addDays(new Date(date), 90);
       const windowStart = addDays(deadline, -15);
-      
-      return base44.entities.NinetyDayReport.create({
+      const { error } = await supabase.from('ninety_day_reports').insert([{
         user_email: user.email,
         last_arrival_date: date,
         report_deadline: deadline.toISOString().split('T')[0],
         window_start: windowStart.toISOString().split('T')[0],
         status: 'pending'
-      });
+      }]);
+      if (error) throw error;
+      return true;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ninety-day-reports'] });
@@ -74,14 +85,16 @@ export default function AdminManager() {
 
       const alertDate = addDays(expiryDate, -30);
 
-      return base44.entities.NinetyDayReport.create({
+      const { error } = await supabase.from('ninety_day_reports').insert([{
         user_email: user.email,
         last_arrival_date: extensionDate,
         report_deadline: expiryDate.toISOString().split('T')[0],
         window_start: alertDate.toISOString().split('T')[0],
         status: 'pending',
         notes: `${visaType} - ${duration} extension expires`
-      });
+      }]);
+      if (error) throw error;
+      return true;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ninety-day-reports'] });
@@ -91,17 +104,25 @@ export default function AdminManager() {
   });
 
   const deleteReportMutation = useMutation({
-    mutationFn: (id) => base44.entities.NinetyDayReport.delete(id),
+    mutationFn: async (id) => {
+      const { error } = await supabase.from('ninety_day_reports').delete().eq('id', id);
+      if (error) throw error;
+      return true;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ninety-day-reports'] });
     }
   });
 
   const completeReportMutation = useMutation({
-    mutationFn: (id) => base44.entities.NinetyDayReport.update(id, {
-      status: 'completed',
-      completed_date: new Date().toISOString().split('T')[0]
-    }),
+    mutationFn: async (id) => {
+      const { error } = await supabase.from('ninety_day_reports').update({
+        status: 'completed',
+        completed_date: new Date().toISOString().split('T')[0]
+      }).eq('id', id);
+      if (error) throw error;
+      return true;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ninety-day-reports'] });
     }
