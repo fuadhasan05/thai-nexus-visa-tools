@@ -621,30 +621,30 @@ function PacketBuilderTool({ selectedVisa, setSelectedVisa, currentUser }) {
     setTranslatingDoc(doc.name);
     try {
       const { data: fnData, error: fnError } = await supabase.functions.invoke('invokeOpenAI', {
-        prompt: `Translate and explain this Thai document in simple English. Provide:
-1. Document type (what it is)
-2. Full translation
-3. Important details highlighted
-4. What this document is typically used for
-
-Be detailed and clear for someone who doesn't read Thai.`,
-        file_urls: [doc.url],
-        response_json_schema: {
-          type: "object",
-          properties: {
-            document_type: { type: "string" },
-            translation: { type: "string" },
-            important_points: { type: "array", items: { type: "string" } },
-            purpose: { type: "string" }
-          }
-        },
-        model: "gpt-4o-mini"
-      });
+        body: JSON.stringify({
+          prompt: `Translate and explain this Thai document in simple English. Provide:\n1. Document type (what it is)\n2. Full translation\n3. Important details highlighted\n4. What this document is typically used for\n\nBe detailed and clear for someone who doesn't read Thai.`,
+          file_urls: [doc.url],
+          response_json_schema: {
+            type: "object",
+            properties: {
+              document_type: { type: "string" },
+              translation: { type: "string" },
+              important_points: { type: "array", items: { type: "string" } },
+              purpose: { type: "string" }
+            }
+          },
+          model: "gpt-4o-mini"
+        })
       });
 
       if (fnError) throw fnError;
 
-      // Deduct credit
+      // Deduct credit and append transaction record
+      const newTransaction = {
+        description: 'Document translation',
+        date: new Date().toISOString()
+      };
+
       const { data: updatedCredits, error: creditErr } = await supabase
         .from('UserCredits')
         .update({
@@ -652,25 +652,23 @@ Be detailed and clear for someone who doesn't read Thai.`,
           credits_used: (credits.credits_used || 0) + 1,
           transaction_history: [
             ...(credits.transaction_history || []),
+            newTransaction
           ],
         })
         .eq('id', credits.id)
         .select()
         .single();
       if (creditErr) throw creditErr;
-            description: 'Document translation',
-            date: new Date().toISOString()
-          }
-        ]
-      });
 
       queryClient.invalidateQueries({ queryKey: ['user-credits'] });
       queryClient.invalidateQueries({ queryKey: ['user-credits-packet'] });
 
+      // Determine translation result (support multiple response shapes)
+      const translationResult = fnData?.translation || fnData?.translated_content || fnData || null;
 
       // Update document with translation
       setDocuments(prev => prev.map(d =>
-        d.name === doc.name ? { ...d, translation: response.data } : d
+        d.name === doc.name ? { ...d, translation: translationResult } : d
       ));
       addSuccess('Document translated successfully!');
     } catch (error) {
