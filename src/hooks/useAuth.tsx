@@ -45,7 +45,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (session?.user?.email) {
             try {
               const { data: profData } = await supabase.from('profiles').select('*').eq('email', session.user.email).limit(1);
-              setProfile((profData && profData[0]) || null);
+              const appProfile = (profData && profData[0]) || null;
+              setProfile(appProfile);
+
+              // If no profile exists in app DB, attempt to create it via server-side endpoint.
+              // This covers OAuth redirects where profile creation was not performed client-side.
+              if (!appProfile && session.user && session.user.id) {
+                try {
+                  console.log('[Auth] No app profile found; attempting server-side create-profile');
+                  const resp = await fetch('/api/create-profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: session.user.id, email: session.user.email, username: session.user.user_metadata?.user_name || null })
+                  });
+                  if (resp.ok) {
+                    const json = await resp.json();
+                    if (json.profile) setProfile(json.profile);
+                  } else {
+                    const err = await resp.json().catch(() => ({}));
+                    console.warn('[Auth] Server create-profile failed on init:', err);
+                  }
+                } catch (e) {
+                  console.warn('[Auth] Error calling server create-profile on init:', e);
+                }
+              }
             } catch (e) {
               // ignore profile fetch errors here
             }
@@ -70,7 +93,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           if (sess?.user?.email) {
             const { data: profData } = await supabase.from('profiles').select('*').eq('email', sess.user.email).limit(1);
-            setProfile((profData && profData[0]) || null);
+            const appProfile = (profData && profData[0]) || null;
+            setProfile(appProfile);
+
+            // If no profile exists, attempt server-side creation (covers OAuth redirect flows)
+            if (!appProfile && sess.user && sess.user.id) {
+              try {
+                console.log('[Auth] No app profile after auth change; attempting server-side create-profile');
+                const resp = await fetch('/api/create-profile', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId: sess.user.id, email: sess.user.email, username: sess.user.user_metadata?.user_name || null })
+                });
+                if (resp.ok) {
+                  const json = await resp.json();
+                  if (json.profile) setProfile(json.profile);
+                } else {
+                  const err = await resp.json().catch(() => ({}));
+                  console.warn('[Auth] Server create-profile failed on auth change:', err);
+                }
+              } catch (e) {
+                console.warn('[Auth] Error calling server create-profile on auth change:', e);
+              }
+            }
           } else {
             setProfile(null);
           }

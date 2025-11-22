@@ -79,11 +79,13 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (profileError) {
+      // Log full error for diagnosis
       console.error(`[API] Profile insertion failed for userId=${userId}:`, profileError);
       return res.status(500).json({ 
         error: 'Failed to create profile',
-        details: profileError.message,
-        code: profileError.code
+        details: profileError.message || profileError,
+        // include whole error object when available to aid debugging
+        errorObject: profileError
       });
     }
 
