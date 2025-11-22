@@ -595,23 +595,13 @@ export default function KnowledgeHub() {
 
           {/* Quick Actions */}
           <div className="flex flex-wrap gap-3 justify-center mt-8">
-            {(canContribute || appProfile?.role === 'admin') && (
-              appProfile?.role === 'admin' ? (
-                <Button
-                  onClick={() => setShowWriteModal(true)}
-                  className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white border border-white/40 font-bold"
-                >
+            {currentUser && (
+              <Link href={createPageUrl("KnowledgePost") + "?new=true"}>
+                <Button className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white border border-white/40 font-bold">
                   <Plus className="w-5 h-5 mr-2" />
                   Write Article
                 </Button>
-              ) : (
-                <Link href={createPageUrl("knowledge") + "?new=true"}>
-                  <Button className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white border border-white/40 font-bold">
-                    <Plus className="w-5 h-5 mr-2" />
-                    Write Article
-                  </Button>
-                </Link>
-              )
+              </Link>
             )}
             {canModerate && (
               <Link href={createPageUrl("AdminKnowledge")}>

@@ -70,6 +70,52 @@ export default function AdminKnowledgeEdit() {
     cacheTime: 10 * 60 * 1000, // 10 minutes
   });
 
+  // Fetch post data
+  const { data: post, isLoading: isLoadingPost } = useQuery({
+    queryKey: ['admin-edit-post', postId],
+    queryFn: async () => {
+      if (!postId) return null;
+      const { data, error } = await supabase
+        .from('knowledge')
+        .select('*')
+        .eq('id', postId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!postId,
+    onSuccess: (data) => {
+      if (data && !formData) {
+        setFormData({
+          title: data.title || '',
+          content: data.content || '',
+          excerpt: data.excerpt || '',
+          category_id: data.category_id || '',
+          tags: data.tags || [],
+          meta_title: data.meta_title || '',
+          meta_description: data.meta_description || '',
+          meta_keywords: data.meta_keywords || '',
+          difficulty_level: data.difficulty_level || 'beginner',
+          status: data.status || 'draft'
+        });
+      }
+    }
+  });
+
+  // Fetch categories
+  const { data: categories = [], isLoading: isLoadingCategories } = useQuery({
+    queryKey: ['knowledge-categories'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('KnowledgeCategory')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
   // Generate with AI (content & SEO) using Supabase Edge Function
   const handleAIGenerate = async (type) => {
     if (!formData?.title && type === 'content') {
@@ -166,12 +212,21 @@ export default function AdminKnowledgeEdit() {
         finalSlug = slugExists ? `${newSlug}-${Date.now()}` : newSlug;
       }
       
-      const { error } = await supabase.from('knowledge').update({
-        ...data,
+      // Only include fields that exist in the knowledge table schema
+      const updateData = {
+        title: data.title,
+        content: data.content,
+        excerpt: data.excerpt,
+        summary: data.summary,
+        category_id: data.category_id,
+        tags: data.tags,
+        difficulty_level: data.difficulty_level,
+        status: data.status,
         slug: finalSlug,
-        last_edited_date: new Date().toISOString(),
-        canonical_url: `https://visa.thainexus.co.th/knowledgepost?slug=${finalSlug}`
-      }).eq('id', postId);
+        updated_at: new Date().toISOString()
+      };
+      
+      const { error } = await supabase.from('knowledge').update(updateData).eq('id', postId);
       if (error) throw error;
       return true;
     },
@@ -237,6 +292,10 @@ export default function AdminKnowledgeEdit() {
       tags: formData.tags.filter(tag => tag !== tagToRemove)
     });
   };
+
+  // Check user permissions
+  const canModerate = userProfile && ['moderator', 'admin'].includes(userProfile.role);
+  const isAdmin = userProfile?.role === 'admin';
 
   if (isLoadingCurrentUser || isLoadingUserProfile || isLoadingPost || isLoadingCategories) {
     return (
@@ -306,7 +365,7 @@ export default function AdminKnowledgeEdit() {
       </GlassCard>
 
       {/* Edit Form */}
-      <GlassCard className="p-8">
+      <GlassCard className="p-8 text-black">
         <div className="space-y-6">
           {/* Status, Category, Difficulty, Featured */}
           <div className="grid md:grid-cols-2 gap-4">

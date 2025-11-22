@@ -151,7 +151,7 @@ export default function KnowledgePost() {
   });
 
   // Fetch post by slug OR id (backwards compatibility)
-  const { data: post, isLoading: isLoadingPost } = useQuery({ // Renamed isLoading
+  const { data: post, isLoading: isLoadingPost, error: postError } = useQuery({ // Renamed isLoading
     queryKey: ['knowledge-post', postSlug || postId], // Use postSlug or postId for key
     queryFn: async () => {
       if (!postSlug && !postId) return null;
@@ -160,11 +160,12 @@ export default function KnowledgePost() {
           .from('KnowledgePost')
           .select('*')
           .eq('slug', postSlug)
-          .eq('status', 'approved')
-          .limit(1);
-        if (error) throw error;
-        if (!data || data.length === 0) throw new Error('Post not found');
-        return data[0];
+          .single();
+        if (error) {
+          console.error('Error fetching post by slug:', error);
+          return null;
+        }
+        return data;
       }
 
       if (postId) {
@@ -172,14 +173,16 @@ export default function KnowledgePost() {
           .from('KnowledgePost')
           .select('*')
           .eq('id', postId)
-          .eq('status', 'approved')
-          .limit(1);
-        if (error) throw error;
-        if (!data || data.length === 0) throw new Error('Post not found');
-        return data[0];
+          .single();
+        if (error) {
+          console.error('Error fetching post by id:', error);
+          return null;
+        }
+        return data;
       }
     },
-    enabled: !isNewPost && (!!postSlug || !!postId) // Only enabled if not new and a slug/ID is present
+    enabled: !isNewPost && (!!postSlug || !!postId), // Only enabled if not new and a slug/ID is present
+    retry: false // Don't retry on failure
   });
 
   // Increment view count mutation
@@ -639,17 +642,21 @@ export default function KnowledgePost() {
   const suggestEditMutation = useMutation({
     mutationFn: async (data) => {
       const profile = userProfile || {};
-      if (!post?.id) { // Ensure post.id is available
+      if (!post?.id) {
         addError('Cannot submit suggestion, post ID not found.');
         return;
       }
       const { error } = await supabase
-        .from('KnowledgeEditSuggestion')
+        .from('edit_suggestions')
         .insert([{
           post_id: post.id,
           suggester_email: currentUser.email,
-          suggester_name: profile.full_name || currentUser.full_name,
-          ...data,
+          suggester_name: profile.full_name || currentUser.email?.split('@')[0],
+          edit_type: data.edit_type,
+          suggested_title: data.suggested_title || null,
+          suggested_excerpt: data.suggested_excerpt || null,
+          suggested_content: data.suggested_content,
+          edit_summary: data.edit_summary,
           status: 'pending',
           created_date: new Date().toISOString()
         }]);
@@ -660,6 +667,13 @@ export default function KnowledgePost() {
       queryClient.invalidateQueries({ queryKey: ['edit-suggestions'] });
       addSuccess('Edit suggestion submitted for review!');
       setShowEditSuggestion(false);
+      setEditSuggestionData({
+        suggested_title: '',
+        suggested_content: '',
+        suggested_excerpt: '',
+        edit_summary: '',
+        edit_type: 'content_edit'
+      });
     },
     onError: (error) => {
       addError('Failed to submit suggestion: ' + error.message);
@@ -904,6 +918,7 @@ export default function KnowledgePost() {
         });
       });
 
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTableOfContents(toc);
     }
   }, [post?.content]);
@@ -930,7 +945,6 @@ export default function KnowledgePost() {
   }, [post?.content]);
 
 
-  const canContribute = userProfile && ['contributor', 'moderator', 'admin'].includes(userProfile.role) && userProfile.subscription_active;
   const canModerate = userProfile && ['moderator', 'admin'].includes(userProfile.role);
   const isAdmin = currentUser?.role === 'admin';
   const isAuthor = post && currentUser && post.author_email === currentUser.email;
@@ -958,6 +972,7 @@ export default function KnowledgePost() {
   };
 
   // Calculate answer quality for sorting
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const sortedComments = useMemo(() => {
     return [...comments].sort((a, b) => {
       // Accepted answer always first
@@ -976,8 +991,8 @@ export default function KnowledgePost() {
   }, [comments, post?.accepted_answer_id]);
 
 
-  // New Post Form
-  if (isNewPost && canContribute) { // Changed isNew to isNewPost
+  // New Post Form - Allow all logged-in users to create posts
+  if (isNewPost && currentUser) { // Changed from canContribute to currentUser
     return (
       <div className="max-w-4xl mx-auto space-y-6 px-4 sm:px-0">
         <SEOHead page="KnowledgePost" /> {/* SEOHead is kept for new post form page */}
@@ -1095,6 +1110,31 @@ export default function KnowledgePost() {
     );
   }
 
+  // Show login prompt for new post if not authenticated
+  if (isNewPost && !currentUser) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 sm:px-0">
+        <SEOHead page="KnowledgePost" />
+        <GlassCard className="p-12 text-center">
+          <BookOpen className="w-16 h-16 text-[#272262] mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-[#272262] mb-4">Sign In to Write</h1>
+          <p className="text-[#454545] mb-6">You need to be logged in to create articles.</p>
+          <div className="flex gap-3 justify-center">
+            <Button 
+              onClick={() => router.push(createPageUrl('login'))}
+              className="bg-[#272262] hover:bg-[#3d3680] text-white"
+            >
+              Sign In
+            </Button>
+            <Link href={createPageUrl('KnowledgeHub')}>
+              <Button variant="outline">Back to Hub</Button>
+            </Link>
+          </div>
+        </GlassCard>
+      </div>
+    );
+  }
+
   if (isLoadingPost) { // Changed isLoading to isLoadingPost
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-0">
@@ -1151,13 +1191,13 @@ export default function KnowledgePost() {
         {/* Breadcrumbs - MOBILE RESPONSIVE */}
         <div className="flex items-center gap-2 text-xs sm:text-sm text-[#454545] mb-4 sm:mb-6 overflow-x-auto pb-2">
           <Link href={createPageUrl('KnowledgeHub')} className="hover:text-[#272262] whitespace-nowrap">Knowledge Hub</Link>
-          <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+          <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
           {category && (
             <>
               <Link href={createPageUrl('KnowledgeHub') + `?category=${category.id}`} className="hover:text-[#272262] whitespace-nowrap truncate max-w-[150px] sm:max-w-none">
                 {category.name}
               </Link>
-              <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+              <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
             </>
           )}
           <span className="text-[#272262] truncate">{post.title}</span>
@@ -1171,7 +1211,12 @@ export default function KnowledgePost() {
               {/* Header - MOBILE RESPONSIVE */}
               <div className="p-4 sm:p-6 md:p-8 border-b border-[#E7E7E7]">
                 {category && (
-                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r ${category.color} text-xs sm:text-sm font-medium mb-3 sm:mb-4`}>
+                  <span 
+                    className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-white text-xs sm:text-sm font-medium mb-3 sm:mb-4"
+                    style={{ 
+                      background: category.color || 'linear-gradient(135deg, #272262 0%, #3d3680 100%)'
+                    }}
+                  >
                     <BookOpen className="w-3 h-3 sm:w-4 sm:h-4" />
                     {category.name}
                   </span>
@@ -1214,7 +1259,7 @@ export default function KnowledgePost() {
                 )}
 
                 {/* Meta Info - MOBILE RESPONSIVE */}
-                <div className="space-y-4 pb-6 border-b border-[#E7E7E7]">
+                <div className="space-y-4 pb-6 border-b border-[#E7E7E7] text-black">
                   <Link href={getContributorUrl(post.author_email, post.author_name)}>
                     <div className="flex items-center gap-3 hover:opacity-80 transition-opacity">
                       <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-[#272262] to-[#3d3680] flex items-center justify-center flex-shrink-0 relative">
@@ -1240,7 +1285,7 @@ export default function KnowledgePost() {
                         </div>
                         <div className="text-xs flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          Asked {new Date(post.published_date || post.created_date).toLocaleDateString()}
+                          Published {new Date(post.published_date || post.created_date).toLocaleDateString()}
                         </div>
                         {post.last_activity_date && new Date(post.last_activity_date).toDateString() !== new Date(post.created_date).toDateString() && (
                           <div className="text-xs flex items-center gap-1 text-[#454545]">
@@ -1290,7 +1335,7 @@ export default function KnowledgePost() {
               </div>
 
               {/* Article Content - MOBILE RESPONSIVE */}
-              <article className="p-4 sm:p-6 md:p-8 prose prose-sm sm:prose-base md:prose-lg max-w-none">
+              <article className="p-4 sm:p-6 md:p-8 prose prose-sm sm:prose-base md:prose-lg max-w-none text-black">
                 <style>{`
                   article h2 {
                     font-size: 1.25rem;
@@ -1495,7 +1540,7 @@ export default function KnowledgePost() {
                       </Link>
                     )}
 
-                    {(canContribute || canModerate) && (
+                    {currentUser && (
                       <Button
                         onClick={() => {
                           setEditSuggestionData({
@@ -1513,6 +1558,15 @@ export default function KnowledgePost() {
                         <Edit className="w-4 h-4 mr-2" />
                         Suggest Edit
                       </Button>
+                    )}
+
+                    {currentUser && (
+                      <Link href={createPageUrl('KnowledgePost') + '?new=true'}>
+                        <Button variant="outline" size="sm" className="border-green-600 text-green-600 hover:bg-green-50">
+                          <BookOpen className="w-4 h-4 mr-2" />
+                          Write New Article
+                        </Button>
+                      </Link>
                     )}
 
                     <Button onClick={() => setShowVersionHistory(!showVersionHistory)} variant="outline" size="sm">
@@ -1563,7 +1617,7 @@ export default function KnowledgePost() {
 
             {/* Edit Suggestion Form */}
             {showEditSuggestion && (
-              <GlassCard className="p-6 bg-white border border-[#E7E7E7]">
+              <GlassCard className="p-6 bg-white border border-[#E7E7E7] text-black">
                 <h3 className="text-xl font-bold text-[#272262] mb-4 flex items-center gap-2">
                   <Edit className="w-5 h-5 text-[#BF1E2E]" />
                   Suggest an Edit
@@ -1574,7 +1628,7 @@ export default function KnowledgePost() {
                     <select
                       value={editSuggestionData.edit_type}
                       onChange={(e) => setEditSuggestionData({ ...editSuggestionData, edit_type: e.target.value })}
-                      className="w-full p-2 border border-[#E7E7E7] rounded-lg"
+                      className="w-full p-2 border border-[#E7E7E7] text-black rounded-lg"
                     >
                       <option value="content_edit">Content Edit</option>
                       <option value="typo_fix">Typo Fix</option>
@@ -1858,7 +1912,7 @@ export default function KnowledgePost() {
               </h3>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-[#454545]">Asked:</span>
+                  <span className="text-[#454545]">Published:</span>
                   <span className="font-medium text-[#272262]">
                     {new Date(post.published_date || post.created_date).toLocaleDateString()}
                   </span>
