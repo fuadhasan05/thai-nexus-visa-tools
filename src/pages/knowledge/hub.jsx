@@ -822,41 +822,6 @@ export default function KnowledgeHub() {
             </div>
           )}
 
-          {/* Popular Posts */}
-          {!aiSearchResults && sortBy !== 'unanswered' && sortBy !== 'trending' && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-3xl font-bold text-[#272262] flex items-center gap-3">
-                  <TrendingUp className="w-8 h-8 text-[#BF1E2E]" />
-                  Popular Questions
-                </h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-4">
-                {popularPosts.slice(0, 4).map(post => {
-                  const category = categories.find(c => c.id === post.category_id);
-                  return (
-                    <Link key={post.id} href={createPageUrl("knowledge") + `?slug=${post.slug}`}>
-                      <GlassCard className="p-6 bg-white border border-[#E7E7E7] hover:border-[#272262] hover:scale-105 transition-all">
-                        {category && (
-                          <span className="inline-block px-3 py-1 rounded-full bg-[#272262] text-white text-xs font-bold mb-3">
-                            {category.name}
-                          </span>
-                        )}
-                        <h3 className="text-lg font-bold text-[#272262] mb-3 hover:text-[#BF1E2E] line-clamp-2">{post.title}</h3>
-                        <p className="text-[#454545] text-sm mb-4 line-clamp-2">{post.excerpt}</p>
-                        <div className="flex items-center gap-4 text-xs text-[#454545]">
-                          <span className="font-medium">{post.view_count || 0} views</span>
-                          <span>•</span>
-                          <span className="font-medium">{post.comment_count || 0} comments</span>
-                        </div>
-                      </GlassCard>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* All Posts with Enhanced Filters */}
           <div>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -867,7 +832,7 @@ export default function KnowledgeHub() {
                  'All Questions'}
               </h2>
 
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2">
                 {!aiSearchResults && (
                   <>
                     <Select value={sortBy} onValueChange={setSortBy}>
@@ -1101,6 +1066,41 @@ export default function KnowledgeHub() {
               </GlassCard>
             )}
           </div>
+
+           {/* Popular Posts */}
+          {!aiSearchResults && sortBy !== 'unanswered' && sortBy !== 'trending' && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-bold text-[#272262] flex items-center gap-3">
+                  <TrendingUp className="w-8 h-8 text-[#BF1E2E]" />
+                  Popular Questions
+                </h2>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                {popularPosts.slice(0, 4).map(post => {
+                  const category = categories.find(c => c.id === post.category_id);
+                  return (
+                    <Link key={post.id} href={createPageUrl("knowledge") + `?slug=${post.slug}`}>
+                      <GlassCard className="p-6 bg-white border border-[#E7E7E7] hover:border-[#272262] hover:scale-105 transition-all">
+                        {category && (
+                          <span className="inline-block px-3 py-1 rounded-full bg-[#272262] text-white text-xs font-bold mb-3">
+                            {category.name}
+                          </span>
+                        )}
+                        <h3 className="text-lg font-bold text-[#272262] mb-3 hover:text-[#BF1E2E] line-clamp-2">{post.title}</h3>
+                        <p className="text-[#454545] text-sm mb-4 line-clamp-2">{post.excerpt}</p>
+                        <div className="flex items-center gap-4 text-xs text-[#454545]">
+                          <span className="font-medium">{post.view_count || 0} views</span>
+                          <span>•</span>
+                          <span className="font-medium">{post.comment_count || 0} comments</span>
+                        </div>
+                      </GlassCard>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Sidebar - 3 columns */}
@@ -1146,15 +1146,15 @@ export default function KnowledgeHub() {
             </GlassCard>
           )}
 
-          {/* Trending Questions - REMOVED INFO BOX */}
-          {trendingPosts.length > 0 && (
-            <GlassCard className="p-6 bg-white border border-[#E7E7E7]">
-              <h3 className="text-lg font-bold text-[#272262] mb-4 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-[#BF1E2E]" />
-                Trending Now
-              </h3>
-              <div className="space-y-3">
-                {trendingPosts.map(post => (
+          {/* Trending Questions */}
+          <GlassCard className="p-6 bg-white border border-[#E7E7E7]">
+            <h3 className="text-lg font-bold text-[#272262] mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-[#BF1E2E]" />
+              Trending Questions
+            </h3>
+            <div className="space-y-3">
+              {trendingPosts.length > 0 ? (
+                trendingPosts.map(post => (
                   <Link key={post.id} href={createPageUrl("knowledge") + `?slug=${post.slug}`}>
                     <div className="p-3 rounded-lg hover:bg-[#F8F9FA] transition-colors border border-[#E7E7E7]">
                       <h4 className="font-medium text-[#272262] text-sm mb-2 line-clamp-2">{post.title}</h4>
@@ -1174,20 +1174,22 @@ export default function KnowledgeHub() {
                       </div>
                     </div>
                   </Link>
-                ))}
-              </div>
-            </GlassCard>
-          )}
+                ))
+              ) : (
+                <p className="text-sm text-[#454545] text-center py-4">No trending questions yet</p>
+              )}
+            </div>
+          </GlassCard>
 
           {/* Top Contributors */}
-          {topContributors.length > 0 && (
-            <GlassCard className="p-6 bg-white border border-[#E7E7E7]">
-              <h3 className="text-lg font-bold text-[#272262] mb-4 flex items-center gap-2">
-                <Users className="w-5 h-5 text-[#BF1E2E]" />
-                Top Contributors
-              </h3>
-              <div className="space-y-3">
-                {topContributors.map(contributor => {
+          <GlassCard className="p-6 bg-white border border-[#E7E7E7]">
+            <h3 className="text-lg font-bold text-[#272262] mb-4 flex items-center gap-2">
+              <Users className="w-5 h-5 text-[#BF1E2E]" />
+              Top Contributors
+            </h3>
+            <div className="space-y-3">
+              {topContributors.length > 0 ? (
+                topContributors.map(contributor => {
                   const realPostCount = allPosts.filter(post => post.author_email === contributor.user_email).length;
 
                   return (
@@ -1197,8 +1199,9 @@ export default function KnowledgeHub() {
                       className="block hover:bg-[#F8F9FA] p-2 rounded-lg transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#272262] to-[#BF1E2E] flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-linear-to-br from-[#272262] to-[#BF1E2E] flex items-center justify-center shrink-0">
                           {contributor.avatar_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
                             <img src={contributor.avatar_url} alt={contributor.full_name} className="w-full h-full rounded-full object-cover" />
                           ) : (
                             <span className="text-white text-sm font-bold">{contributor.full_name?.charAt(0) || 'U'}</span>
@@ -1211,13 +1214,15 @@ export default function KnowledgeHub() {
                       </div>
                     </Link>
                   );
-                })}
-              </div>
-            </GlassCard>
-          )}
+                })
+              ) : (
+                <p className="text-sm text-[#454545] text-center py-4">No contributors yet</p>
+              )}
+            </div>
+          </GlassCard>
 
           {/* Quick Stats */}
-          <GlassCard className="p-6 bg-gradient-to-br from-[#F8F9FA] via-white to-[#F1F1F1] border border-[#E7E7E7]">
+          <GlassCard className="p-6 bg-linear-to-br from-[#F8F9FA] via-white to-[#F1F1F1] border border-[#E7E7E7]">
             <h3 className="text-lg font-bold text-[#272262] mb-4">Community Stats</h3>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
