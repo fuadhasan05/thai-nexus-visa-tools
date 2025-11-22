@@ -280,10 +280,39 @@ export default function AdminKnowledge() {
       const app = apps && apps[0];
       if (!app) throw new Error('Application not found');
 
-      const { error: updErr } = await supabase.from('contributorapplications').update({ contributor_status: 'approved', approved_date: new Date().toISOString() }).eq('id', applicationId);
-      if (updErr) throw updErr;
+      // Some Supabase anon clients can hit a schema-cache mismatch when a new column
+      // (e.g. `approved_date`) was recently added. Try the full update first,
+      // and if it fails with a schema/cache error, retry without the timestamp.
+      try {
+        const { error: updErr } = await supabase
+          .from('contributorapplications')
+          .update({ contributor_status: 'approved', approved_date: new Date().toISOString() })
+          .eq('id', applicationId);
+        if (updErr) throw updErr;
+      } catch (e) {
+        const msg = String(e?.message || e);
+        if (msg.includes('schema cache') || msg.includes("Could not find the 'approved_date'") || msg.includes('approved_date')) {
+          // Retry without the timestamp field to avoid the schema cache issue
+          const { error: retryErr } = await supabase
+            .from('contributorapplications')
+            .update({ contributor_status: 'approved' })
+            .eq('id', applicationId);
+          if (retryErr) throw retryErr;
+        } else {
+          throw e;
+        }
+      }
 
-      // Optionally, you might want to update a profiles table or grant role elsewhere.
+      // Update the user's profile role to 'contributor' if a profile exists
+      try {
+        const { error: profErr } = await supabase
+          .from('profiles')
+          .update({ role: 'contributor' })
+          .eq('email', app.user_email);
+        if (profErr) console.warn('Failed to update profile role:', profErr.message || profErr);
+      } catch (e) {
+        console.warn('Error updating profile role:', e);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-contributor-applications'] });

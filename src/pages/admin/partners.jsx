@@ -401,11 +401,41 @@ function ContributorManagement() {
 
   const approveContributorMutation = useMutation({
     mutationFn: async ({ id }) => {
-      const { error } = await supabase
-        .from('contributorapplications')
-        .update({ contributor_status: 'approved', approval_date: new Date().toISOString() })
-        .eq('id', id);
-      if (error) throw error;
+      const { data: apps, error: appErr } = await supabase.from('contributorapplications').select('*').eq('id', id).limit(1);
+      if (appErr) throw appErr;
+      const app = apps && apps[0];
+
+      // Try updating contributor status with approval timestamp; if schema cache
+      // prevents updating the timestamp column, retry without it.
+      try {
+        const { error } = await supabase
+          .from('contributorapplications')
+          .update({ contributor_status: 'approved', approval_date: new Date().toISOString() })
+          .eq('id', id);
+        if (error) throw error;
+      } catch (e) {
+        const msg = String(e?.message || e);
+        if (msg.includes('schema cache') || msg.includes("Could not find the 'approval_date'") || msg.includes('approval_date')) {
+          const { error: retryErr } = await supabase
+            .from('contributorapplications')
+            .update({ contributor_status: 'approved' })
+            .eq('id', id);
+          if (retryErr) throw retryErr;
+        } else {
+          throw e;
+        }
+      }
+
+      // Update the user's profile role to 'contributor' if a profile exists
+      try {
+        const { error: profErr } = await supabase
+          .from('profiles')
+          .update({ role: 'contributor' })
+          .eq('email', app?.user_email);
+        if (profErr) console.warn('Failed to update profile role:', profErr.message || profErr);
+      } catch (e) {
+        console.warn('Error updating profile role:', e);
+      }
       return true;
     },
     onSuccess: () => {

@@ -580,12 +580,12 @@ export default function AdminUsers() {
       </div>
 
       {/* Orphaned Profiles Section */}
-      {profiles.some(p => !users.find(u => u.email === p.user_email)) && (
+      {profiles.some(p => !accounts.find(u => u.email === p.user_email)) && (
         <div className="space-y-4 mt-8">
           <h2 className="text-2xl font-bold text-gray-900">Orphaned Profiles</h2>
           <p className="text-gray-600 text-sm">These contributor profiles exist but don't have matching user accounts in our system. They might belong to deleted users or accounts with changed emails.</p>
 
-          {profiles.filter(p => !users.find(u => u.email === p.user_email)).map(profile => (
+          {profiles.filter(p => !accounts.find(u => u.email === p.user_email)).map(profile => (
             <GlassCard key={profile.id} className="p-6 bg-orange-50 border-orange-200">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
