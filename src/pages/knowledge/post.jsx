@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import Link from "next/link";
@@ -63,8 +63,11 @@ const htmlToPlainText = (html) => {
 };
 
 export default function KnowledgePost() {
+  const router = useRouter();
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams('');
-  const postSlug = urlParams.get('slug'); // New: fetch slug
+  
+  // Read slug from either URL params or Next.js router query
+  const postSlug = urlParams.get('slug') || router.query.slug;
   const postId = urlParams.get('id'); // Backwards compatibility: fetch id
   const isNewPost = urlParams.get('new') === 'true'; // Renamed from isNew
 

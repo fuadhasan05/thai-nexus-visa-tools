@@ -41,10 +41,8 @@ export default function Profile() {
       if (!data || data.length === 0) {
         const defaultRecord = {
           user_email: user.email,
-          credits_balance: user?.role === 'admin' ? 1000 : 5,
-          credits_used: 0,
-          credits_purchased: 0,
-          transaction_history: []
+          credits: user?.role === 'admin' ? 1000 : 5,
+          source: 'initial'
         };
         const { data: inserted, error: insertError } = await supabase
           .from('UserCredits')
@@ -400,7 +398,7 @@ export default function Profile() {
         <div className="grid md:grid-cols-3 gap-6 mb-6">
           <div className="bg-[#F8F9FA] p-6 rounded-xl border border-[#E7E7E7]">
             <p className="text-[#454545] text-sm mb-1">Available Credits</p>
-            <p className="text-4xl font-bold text-[#272262]">{credits?.credits_balance || 0}</p>
+            <p className="text-4xl font-bold text-[#272262]">{credits?.credits || 0}</p>
           </div>
           <div className="bg-green-50 p-6 rounded-xl border border-green-200">
             <p className="text-[#454545] text-sm mb-1">Total Used</p>
@@ -444,7 +442,7 @@ export default function Profile() {
           {user.role === 'admin' ? (
             <Button
               onClick={() => adminTopupMutation.mutate()}
-              disabled={adminTopupMutation.isPending || (credits?.credits_balance >= 2000)}
+              disabled={adminTopupMutation.isPending || (credits?.credits >= 2000)}
               className="w-full bg-[#272262] hover:bg-[#3d3680] text-white"
             >
               <Plus className="w-5 h-5 mr-2" />

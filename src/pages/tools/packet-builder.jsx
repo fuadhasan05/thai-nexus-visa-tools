@@ -613,7 +613,7 @@ function PacketBuilderTool({ selectedVisa, setSelectedVisa, currentUser }) {
   };
 
   const handleTranslate = async (doc) => {
-    if (!credits || credits.credits_balance < 1) {
+    if (!credits || credits.credits < 1) {
       addError('Insufficient credits. Top up in your Profile to use document translation.');
       return;
     }
@@ -648,7 +648,7 @@ function PacketBuilderTool({ selectedVisa, setSelectedVisa, currentUser }) {
       const { data: updatedCredits, error: creditErr } = await supabase
         .from('UserCredits')
         .update({
-          credits_balance: credits.credits_balance - 1,
+          credits: credits.credits - 1,
           credits_used: (credits.credits_used || 0) + 1,
           transaction_history: [
             ...(credits.transaction_history || []),
@@ -685,7 +685,7 @@ function PacketBuilderTool({ selectedVisa, setSelectedVisa, currentUser }) {
   <GlassCard className="p-8 text-center bg-linear-to-br from-purple-50 to-blue-50" hover={false}>
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-100 border border-purple-200 mb-4">
           <Crown className="w-4 h-4 text-purple-600" />
-          <span className="text-purple-700 text-sm font-medium">Premium Access Active • {credits?.credits_balance || 0} AI Credits</span>
+          <span className="text-purple-700 text-sm font-medium">Premium Access Active • {credits?.credits || 0} AI Credits</span>
         </div>
         <h1 className="text-4xl font-bold text-gray-900 mb-3">Complete Visa Application Assistant</h1>
         <p className="text-gray-600">Everything you need from start to finish</p>

@@ -1,68 +1,26 @@
-// Testing & dev notes:
-// - Run locally: npm run dev and open a post page e.g. /knowledge/my-post
-// - Pages are statically generated with ISR (revalidate: 60s).
-// - Env required (on Vercel): NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_KEY, SUPABASE_SERVICE_ROLE_KEY, ADMIN_TOKEN
+// Article detail page using dynamic slug route
+// Renders post.jsx content with clean URLs like /knowledge/article-slug
+import { useRouter } from 'next/router';
+import dynamic from 'next/dynamic';
 
-import Head from 'next/head';
-import { supabase } from '@/lib/supabaseClient';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+// Dynamically import post.jsx to avoid SSR issues
+const KnowledgePost = dynamic(() => import('./post'), { ssr: false });
 
-export default function KnowledgePost({ post }) {
-  if (!post) return <div>Post not found</div>;
+export default function KnowledgeSlugPage() {
+  const router = useRouter();
+  const { slug } = router.query;
 
-  return (
-    <>
-      <Head>
-        <title>{post.title} • Thai Nexus</title>
-        <meta name="description" content={post.summary || ''} />
-      </Head>
-
-      <main className="max-w-3xl mx-auto p-6">
-        <article>
-          <h1 className="text-2xl font-semibold mb-2">{post.title}</h1>
-          <p className="text-sm text-gray-600 mb-4">By {post.author || 'Unknown'} • {post.published_at ? new Date(post.published_at).toLocaleString() : (post.created_at ? new Date(post.created_at).toLocaleString() : '')}</p>
-          <div dangerouslySetInnerHTML={{ __html: post.content || '' }} />
-        </article>
-      </main>
-    </>
-  );
-}
-
-export async function getStaticPaths() {
-  // Pre-build paths for published posts. Use blocking fallback for SEO on new posts.
-  // Use server-side admin client for static generation to avoid anon role/schema issues
-  const { data, error } = await supabaseAdmin
-    .from('knowledge')
-    .select('slug')
-    .eq('published', true);
-
-  if (error) {
-    console.error('supabaseAdmin error fetching slugs:', error);
+  if (!slug) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#272262] mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading article...</p>
+        </div>
+      </div>
+    );
   }
 
-  const paths = (data || []).map((r) => ({ params: { slug: r.slug } }));
-
-  return { paths, fallback: 'blocking' };
-}
-
-export async function getStaticProps({ params }) {
-  const slug = params?.slug;
-  if (!slug) return { notFound: true };
-
-  const { data, error } = await supabaseAdmin
-    .from('knowledge')
-    .select('id, title, slug, summary, content, author, tags, published, published_at, created_at, updated_at')
-    .eq('slug', slug)
-    .limit(1)
-    .single();
-
-  if (error || !data) {
-    // If not found, let Next.js return 404
-    return { notFound: true, revalidate: 60 };
-  }
-
-  return {
-    props: { post: data },
-    revalidate: 60
-  };
+  // Render the post.jsx component which will read slug from router.query
+  return <KnowledgePost />;
 }

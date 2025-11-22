@@ -154,7 +154,7 @@ function LayoutContent({ children, currentPageName }) {
         .from('UserCredits')
         .insert([{
           user_email: currentUser.email,
-          credits_balance: initialBalance,
+          credits: initialBalance,
           credits_used: 0,
           credits_purchased: 0,
           transaction_history: []
@@ -418,7 +418,7 @@ function LayoutContent({ children, currentPageName }) {
                   className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[#F1F1F1] transition-colors"
                 >
                   <Coins className="w-4 h-4 text-[#BF1E2E]" />
-                  <span className="text-sm font-medium text-[#454545]">{credits?.credits_balance || 0}</span>
+                  <span className="text-sm font-medium text-[#454545]">{credits?.credits || 0}</span>
                 </Link>
               )}
 

@@ -923,7 +923,7 @@ export default function KnowledgeHub() {
                       </div>
 
                       {/* Content Column */}
-                      <Link href={createPageUrl("knowledge") + `?slug=${post.slug}`} className="flex-1 min-w-0">
+                      <Link href={`/knowledge/${post.slug}`} className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2 flex-wrap">
                           {category && (
                             <span className="px-2 py-1 rounded-md bg-[#272262] text-white text-xs font-medium">
@@ -1080,7 +1080,7 @@ export default function KnowledgeHub() {
                 {popularPosts.slice(0, 4).map(post => {
                   const category = categories.find(c => c.id === post.category_id);
                   return (
-                    <Link key={post.id} href={createPageUrl("knowledge") + `?slug=${post.slug}`}>
+                    <Link key={post.id} href={`/knowledge/${post.slug}`}>
                       <GlassCard className="p-6 bg-white border border-[#E7E7E7] hover:border-[#272262] hover:scale-105 transition-all">
                         {category && (
                           <span className="inline-block px-3 py-1 rounded-full bg-[#272262] text-white text-xs font-bold mb-3">
@@ -1155,7 +1155,7 @@ export default function KnowledgeHub() {
             <div className="space-y-3">
               {trendingPosts.length > 0 ? (
                 trendingPosts.map(post => (
-                  <Link key={post.id} href={createPageUrl("knowledge") + `?slug=${post.slug}`}>
+                  <Link key={post.id} href={`/knowledge/${post.slug}`}>
                     <div className="p-3 rounded-lg hover:bg-[#F8F9FA] transition-colors border border-[#E7E7E7]">
                       <h4 className="font-medium text-[#272262] text-sm mb-2 line-clamp-2">{post.title}</h4>
                       <div className="flex items-center gap-3 text-xs text-[#454545]">

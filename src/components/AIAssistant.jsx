@@ -65,7 +65,7 @@ export default function AIAssistant() {
       if (!data || data.length === 0) {
         const defaultRecord = {
           user_email: user.email,
-          credits_balance: user?.role === 'admin' ? 1000 : 5,
+          credits: user?.role === 'admin' ? 1000 : 5,
           credits_used: 0,
           credits_purchased: 0,
           transaction_history: []
@@ -101,7 +101,7 @@ export default function AIAssistant() {
   const askAIMutation = useMutation({
     mutationFn: async (question) => {
       if (user) {
-        if (!credits || credits.credits_balance < 1) {
+        if (!credits || credits.credits < 1) {
           throw new Error('Insufficient credits. Top up in your Profile to continue.');
         }
       } else {
@@ -136,7 +136,7 @@ export default function AIAssistant() {
 
       if (user && credits) {
         const updated = {
-          credits_balance: (credits.credits_balance || 0) - 1,
+          credits: (credits.credits || 0) - 1,
           credits_used: (credits.credits_used || 0) + 1,
           transaction_history: [
             ...(credits.transaction_history || []),
@@ -257,7 +257,7 @@ export default function AIAssistant() {
     }
   };
 
-  const currentCredits = user ? (credits?.credits_balance || 0) : anonymousCredits;
+  const currentCredits = user ? (credits?.credits || 0) : anonymousCredits;
   const isOutOfCredits = currentCredits < 1;
 
   if (!isOpen) {
