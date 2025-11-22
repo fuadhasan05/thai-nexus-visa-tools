@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import GlassCard from '../../components/GlassCard';
+import { toast } from 'sonner';
 
 // Note: removed getStaticProps that returned notFound so this page can be rendered
 export default function KnowledgeHub() {
@@ -59,7 +60,7 @@ export default function KnowledgeHub() {
 
   const addCategory = async () => {
     const name = (newCategoryName || '').trim();
-    if (!name) return alert('Please enter a category name');
+    if (!name) return toast.error('Please enter a category name');
     try {
       const res = await fetch('/api/admin/add-category', {
         method: 'POST',
@@ -74,10 +75,10 @@ export default function KnowledgeHub() {
       await queryClient.invalidateQueries({ queryKey: ['knowledge-categories'] });
       await queryClient.refetchQueries({ queryKey: ['knowledge-categories'] });
       if (data?.id) setBlogFormData(prev => ({ ...prev, category_id: data.id }));
-      alert('Category added');
+      toast.success('Category "' + name + '" created successfully!');
     } catch (e) {
       console.error('Failed to add category', e);
-      alert('Failed to add category: ' + (e?.message || e));
+      toast.error('Failed to add category: ' + (e?.message || e));
     }
   };
 
@@ -261,10 +262,10 @@ export default function KnowledgeHub() {
       queryClient.invalidateQueries({ queryKey: ['trending-posts'] });
       setShowWriteModal(false);
       setBlogFormData({ title: '', excerpt: '', content: '', category_id: '', tags: '', difficulty_level: 'Beginner' });
-      alert('Blog post created successfully!');
+      toast.success('Article published successfully! Your post is now live.');
     },
     onError: (error) => {
-      alert('Error creating blog: ' + error.message);
+      toast.error('Error creating blog: ' + error.message);
     }
   });
 

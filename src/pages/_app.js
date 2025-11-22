@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorProvider } from '../components/ErrorNotification';
 import { ConfirmProvider } from '../components/ConfirmDialog';
 import { AuthProvider } from '@/hooks/useAuth';
+import { Toaster } from '@/components/ui/sonner';
 
 // Create a client for react-query (will be created per instance on the server, per session on client)
 const createQueryClient = () => {
@@ -45,6 +46,7 @@ export default function MyApp({ Component, pageProps }) {
             <Layout>
               <Component {...pageProps} />
             </Layout>
+            <Toaster />
           </AuthProvider>
         </ConfirmProvider>
       </ErrorProvider>
