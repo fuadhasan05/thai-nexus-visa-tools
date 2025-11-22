@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createPageUrl } from '@/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/hooks/useAuth';
 import { Search, TrendingUp, Users, BookOpen, MessageCircle, Plus, Filter, Loader2, ChevronLeft, ChevronRight, Layers, CheckCircle, ThumbsUp, Eye, User, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -154,14 +155,7 @@ export default function KnowledgeHub() {
     }));
   }, [categories, allPosts]);
 
-  const { data: currentUser } = useQuery({
-    queryKey: ['current-user'],
-    queryFn: async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error) return null;
-      return data?.user || null;
-    }
-  });
+  const { user: currentUser, profile: appProfile } = useAuth();
 
   const { data: userProfile } = useQuery({
     queryKey: ['user-profile', currentUser?.email],

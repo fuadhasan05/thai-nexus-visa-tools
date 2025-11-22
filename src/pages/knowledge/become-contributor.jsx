@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/hooks/useAuth';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,33 +21,40 @@ export default function BecomeContributor() {
   const { addError, addSuccess } = useError();
   const queryClient = useQueryClient();
 
-  const { data: currentUser } = useQuery({
-    queryKey: ['current-user-contributor'],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error) return null;
-        return data?.user ?? null;
-      } catch (error) {
-        return null;
+  const { user: currentUser } = useAuth();
+  const [fallbackUser, setFallbackUser] = useState(null);
+
+  React.useEffect(() => {
+    // If auth context hasn't populated yet (rare timing case), try a one-off fetch
+    let mounted = true;
+    (async () => {
+      if (!currentUser) {
+        try {
+          const { data } = await supabase.auth.getUser();
+          if (mounted) setFallbackUser(data?.user ?? null);
+        } catch (e) {
+          // ignore
+        }
       }
-    },
-    retry: false
-  });
+    })();
+    return () => { mounted = false };
+  }, [currentUser]);
+
+  const effectiveUser = currentUser || fallbackUser;
 
   const { data: existingProfile } = useQuery({
-    queryKey: ['contributor-profile', currentUser?.email],
+    queryKey: ['contributor-profile', effectiveUser?.email],
     queryFn: async () => {
-      if (!currentUser?.email) return null;
+      if (!effectiveUser?.email) return null;
       const { data, error } = await supabase
         .from('contributorapplications')
         .select('*')
-        .eq('user_email', currentUser.email)
+        .eq('user_email', effectiveUser.email)
         .limit(1);
       if (error) throw error;
       return data?.[0] ?? null;
     },
-    enabled: !!currentUser?.email
+    enabled: !!effectiveUser?.email
   });
 
   const applyMutation = useMutation({
@@ -66,7 +74,7 @@ export default function BecomeContributor() {
         return { ...existingProfile, ...profileData };
       } else {
         const insertData = {
-          user_email: currentUser.email,
+          user_email: effectiveUser.email,
           role: 'user',
           profile_visible: true,
           ...profileData
