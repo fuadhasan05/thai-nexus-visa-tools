@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { uploadFile, getPublicUrl } from '@/lib/supabaseUtils';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -354,11 +355,14 @@ export default function DocumentValidator() {
     setAiValidating(true);
     setPhotoValidation(null); // Clear previous validation results
     try {
-      // Upload photo first
-      const uploadResponse = await base44.integrations.Core.UploadFile({ file });
+      // Upload photo first using Supabase storage
+      const path = `uploads/${Date.now()}_${file.name}`;
+      const { data: upData, error: upErr } = await uploadFile('base44-prod', path, file);
+      if (upErr) throw upErr;
+      const uploadUrl = getPublicUrl('base44-prod', path);
 
       // Analyze with AI
-      const response = await base44.functions.invoke('invokeOpenAI', {
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('invokeOpenAI', {
         prompt: `You are a strict Thai visa photo validator. Analyze this photo against official Thai Immigration requirements.
 
 Check EVERY requirement carefully:
@@ -376,7 +380,7 @@ Check EVERY requirement carefully:
 For each requirement provide: requirement name, status (PASS/WARNING/FAIL), details of what you observe, and fix_suggestion if not PASS.
 
 Overall verdict must be: ACCEPTABLE (all pass), POSSIBLY_ACCEPTABLE (warnings only), or REJECTED (any fails).`,
-        file_urls: [uploadResponse.file_url],
+        file_urls: [uploadUrl],
         response_json_schema: {
           type: "object",
           properties: {
@@ -401,7 +405,10 @@ Overall verdict must be: ACCEPTABLE (all pass), POSSIBLY_ACCEPTABLE (warnings on
           },
           required: ["overall_verdict", "checks", "summary"]
         }
+
       });
+
+      if (fnError) throw fnError;
 
       setPhotoValidation({
         aiAnalysis: response.data,

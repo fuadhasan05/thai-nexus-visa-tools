@@ -6,20 +6,20 @@ export const createPageUrl = (pageName: string) => {
   const key = pageName.replace(/\s+/g, '').toLowerCase();
 
   const pageMap: Record<string, string> = {
-    // Main pages
+    // Main pages (keys are lowercase to match normalized input)
     home: '/',
     visanavigator: '/visa-navigator',
-    EligibilityCalculator: '/tools/eligibility-calculator',
-    DocumentValidator: '/tools/document-validator',
-    CurrencyConverter: '/tools/currency-converter',
-    CostComparison: '/tools/cost-comparison',
-    ImmigrationMap: '/immigration/map',
-    ImmigrationSimulator: '/immigration/simulator',
-    PathwayPlanner: '/tools/pathway-planner',
-    PacketBuilder: '/tools/packet-builder',
-    DocumentChecklist: '/tools/document-checklist',
-    NinetyDayReport: '/tools/90-day-report',
-    AgentComparison: '/partner/agents-comparison',
+    eligibilitycalculator: '/tools/eligibility-calculator',
+    documentvalidator: '/tools/document-validator',
+    currencyconverter: '/tools/currency-converter',
+    costcomparison: '/tools/cost-comparison',
+    immigrationmap: '/immigration/map',
+    immigrationsimulator: '/immigration/simulator',
+    pathwayplanner: '/tools/pathway-planner',
+    packetbuilder: '/tools/packet-builder',
+    documentchecklist: '/tools/document-checklist',
+    ninetydaysreport: '/tools/90-day-report',
+    agentcomparison: '/partner/agents-comparison',
     profile: '/profile',
     settings: '/settings',
     contact: '/contact',

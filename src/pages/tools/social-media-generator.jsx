@@ -18,7 +18,11 @@ export default function SocialMediaGenerator() {
 
   const { data: currentUser } = useQuery({
     queryKey: ['current-user-social'],
-    queryFn: () => base44.auth.me(),
+    queryFn: async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      return data?.user ?? null;
+    },
     retry: false,
   });
 
@@ -37,10 +41,13 @@ export default function SocialMediaGenerator() {
     mutationFn: async ({ prompt, count = 1 }) => {
       const images = [];
       for (let i = 0; i < count; i++) {
-        const response = await base44.integrations.Core.GenerateImage({
-          prompt: prompt
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('generateImage', {
+          body: JSON.stringify({ prompt })
         });
-        images.push(response.url);
+        if (fnError) throw fnError;
+        // support single url or array of urls
+        if (fnData?.url) images.push(fnData.url);
+        else if (Array.isArray(fnData?.urls)) images.push(...fnData.urls);
       }
       return images;
     },

@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { uploadFile, getPublicUrl } from '@/lib/supabaseUtils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,11 +40,9 @@ export default function PacketBuilder() {
   const { data: currentUser } = useQuery({
     queryKey: ['current-user-packet'],
     queryFn: async () => {
-      try {
-        return await base44.auth.me();
-      } catch (error) {
-        return null;
-      }
+      const { data, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      return data?.user ?? null;
     },
     retry: false
   });
@@ -54,11 +53,14 @@ export default function PacketBuilder() {
     queryKey: ['packet-access', currentUser?.email],
     queryFn: async () => {
       if (!currentUser?.email) return null;
-      const results = await base44.entities.PacketBuilderAccess.filter({
-        user_email: currentUser.email,
-        access_granted: true
-      });
-      return results[0] || null;
+      const { data, error } = await supabase
+        .from('PacketBuilderAccess')
+        .select('*')
+        .eq('user_email', currentUser.email)
+        .eq('access_granted', true)
+        .limit(1);
+      if (error) throw error;
+      return data?.[0] ?? null;
     },
     enabled: !!currentUser?.email
   });
@@ -109,24 +111,28 @@ export default function PacketBuilder() {
 
     setCheckoutLoading(true);
     try {
-      const response = await base44.functions.invoke('createPacketCheckout', {
-        visa_type: visaType,
-        user_email: email,
-        success_url: window.location.origin + '/PacketBuilder?success=true',
-        cancel_url: window.location.origin + '/PacketBuilder?cancelled=true'
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('createPacketCheckout', {
+        body: JSON.stringify({
+          visa_type: visaType,
+          user_email: email,
+          success_url: window.location.origin + '/tools/packet-builder?success=true',
+          cancel_url: window.location.origin + '/tools/packet-builder?cancelled=true'
+        })
       });
 
-      if (response.data?.url) {
-        window.location.href = response.data.url;
-      } else if (response.data?.error) {
-        setCheckoutError(response.data.error);
-        addError(response.data.error);
+      if (fnError) throw fnError;
+
+      if (fnData?.url) {
+        window.location.href = fnData.url;
+      } else if (fnData?.error) {
+        setCheckoutError(fnData.error);
+        addError(fnData.error);
       } else {
         setCheckoutError('Failed to create checkout session. Please try again.');
         addError('Checkout failed - no URL received');
       }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || error.message || 'Unknown error occurred';
+      const errorMessage = error?.message || 'Unknown error occurred';
       setCheckoutError(errorMessage);
       addError('Checkout failed: ' + errorMessage);
     } finally {
@@ -470,9 +476,9 @@ function PacketBuilderTool({ selectedVisa, setSelectedVisa, currentUser }) {
     queryKey: ['user-credits-packet', currentUser?.email],
     queryFn: async () => {
       if (!currentUser?.email) return null;
-      const results = await base44.entities.UserCredits.filter({ user_email: currentUser.email });
-      if (results.length > 0) return results[0];
-      return null;
+      const { data, error } = await supabase.from('UserCredits').select('*').eq('user_email', currentUser.email).limit(1);
+      if (error) throw error;
+      return data?.[0] ?? null;
     },
     enabled: !!currentUser?.email
   });
@@ -586,18 +592,21 @@ function PacketBuilderTool({ selectedVisa, setSelectedVisa, currentUser }) {
   const handleUploadDocument = async (file) => {
     setUploadingDoc(true);
     try {
-      const uploadResponse = await base44.integrations.Core.UploadFile({ file });
+      const path = `uploads/${Date.now()}_${file.name}`;
+      const { data: upData, error: upErr } = await uploadFile('base44-prod', path, file);
+      if (upErr) throw upErr;
+      const fileUrl = getPublicUrl('base44-prod', path);
 
       setDocuments(prev => [...prev, {
         name: file.name,
         type: file.type,
-        url: uploadResponse.file_url,
+        url: fileUrl,
         uploadedAt: new Date().toISOString()
       }]);
 
       addSuccess('Document uploaded successfully!');
     } catch (error) {
-      addError('Upload failed: ' + error.message);
+      addError('Upload failed: ' + (error?.message || String(error)));
     } finally {
       setUploadingDoc(false);
     }
@@ -611,7 +620,7 @@ function PacketBuilderTool({ selectedVisa, setSelectedVisa, currentUser }) {
 
     setTranslatingDoc(doc.name);
     try {
-      const response = await base44.functions.invoke('invokeOpenAI', {
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('invokeOpenAI', {
         prompt: `Translate and explain this Thai document in simple English. Provide:
 1. Document type (what it is)
 2. Full translation
@@ -619,7 +628,7 @@ function PacketBuilderTool({ selectedVisa, setSelectedVisa, currentUser }) {
 4. What this document is typically used for
 
 Be detailed and clear for someone who doesn't read Thai.`,
-        file_urls: doc.url,
+        file_urls: [doc.url],
         response_json_schema: {
           type: "object",
           properties: {
@@ -631,16 +640,24 @@ Be detailed and clear for someone who doesn't read Thai.`,
         },
         model: "gpt-4o-mini"
       });
+      });
+
+      if (fnError) throw fnError;
 
       // Deduct credit
-      await base44.entities.UserCredits.update(credits.id, {
-        credits_balance: credits.credits_balance - 1,
-        credits_used: (credits.credits_used || 0) + 1,
-        transaction_history: [
-          ...(credits.transaction_history || []),
-          {
-            amount: 1,
-            type: 'used',
+      const { data: updatedCredits, error: creditErr } = await supabase
+        .from('UserCredits')
+        .update({
+          credits_balance: credits.credits_balance - 1,
+          credits_used: (credits.credits_used || 0) + 1,
+          transaction_history: [
+            ...(credits.transaction_history || []),
+          ],
+        })
+        .eq('id', credits.id)
+        .select()
+        .single();
+      if (creditErr) throw creditErr;
             description: 'Document translation',
             date: new Date().toISOString()
           }
