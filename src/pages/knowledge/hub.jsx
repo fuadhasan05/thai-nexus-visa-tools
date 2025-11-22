@@ -23,6 +23,7 @@ export default function KnowledgeHub() {
   const [selectedTags, setSelectedTags] = useState([]);
   const [showWriteModal, setShowWriteModal] = useState(false);
   const [blogFormData, setBlogFormData] = useState({ title: '', excerpt: '', content: '', category_id: '', tags: '', difficulty_level: 'Beginner' });
+  const [newCategoryName, setNewCategoryName] = useState('');
   const postsPerPage = 10;
 
   const queryClient = useQueryClient();
@@ -55,6 +56,30 @@ export default function KnowledgeHub() {
       return data || [];
     }
   });
+
+  const addCategory = async () => {
+    const name = (newCategoryName || '').trim();
+    if (!name) return alert('Please enter a category name');
+    try {
+      const res = await fetch('/api/admin/add-category', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || 'Failed to add category');
+      const data = json.data;
+      setNewCategoryName('');
+      // Invalidate and then refetch so the UI has the latest categories immediately
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-categories'] });
+      await queryClient.refetchQueries({ queryKey: ['knowledge-categories'] });
+      if (data?.id) setBlogFormData(prev => ({ ...prev, category_id: data.id }));
+      alert('Category added');
+    } catch (e) {
+      console.error('Failed to add category', e);
+      alert('Failed to add category: ' + (e?.message || e));
+    }
+  };
 
   const { data: popularPosts = [] } = useQuery({
     queryKey: ['knowledge-popular'],
@@ -569,13 +594,23 @@ export default function KnowledgeHub() {
 
           {/* Quick Actions */}
           <div className="flex flex-wrap gap-3 justify-center mt-8">
-            {canContribute && (
-              <Link href={createPageUrl("knowledge") + "?new=true"}>
-                <Button className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white border border-white/40 font-bold">
+            {(canContribute || appProfile?.role === 'admin') && (
+              appProfile?.role === 'admin' ? (
+                <Button
+                  onClick={() => setShowWriteModal(true)}
+                  className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white border border-white/40 font-bold"
+                >
                   <Plus className="w-5 h-5 mr-2" />
                   Write Article
                 </Button>
-              </Link>
+              ) : (
+                <Link href={createPageUrl("knowledge") + "?new=true"}>
+                  <Button className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white border border-white/40 font-bold">
+                    <Plus className="w-5 h-5 mr-2" />
+                    Write Article
+                  </Button>
+                </Link>
+              )
             )}
             {canModerate && (
               <Link href={createPageUrl("AdminKnowledge")}>
@@ -657,6 +692,19 @@ export default function KnowledgeHub() {
                           ))}
                         </SelectContent>
                       </Select>
+                        {appProfile?.role === 'admin' && (
+                          <div className="mt-2 flex gap-2">
+                            <Input
+                              value={newCategoryName}
+                              onChange={(e) => setNewCategoryName(e.target.value)}
+                              placeholder="Add new category"
+                              className="flex-1"
+                            />
+                            <Button onClick={addCategory} disabled={!newCategoryName.trim()} className="bg-[#272262] text-white">
+                              Add
+                            </Button>
+                          </div>
+                        )}
                     </div>
 
                     <div>
@@ -680,7 +728,7 @@ export default function KnowledgeHub() {
                         onChange={(e) => setBlogFormData({ ...blogFormData, content: e.target.value })}
                         placeholder="Your detailed blog content..."
                         rows={8}
-                        className="w-full p-3 border border-[#E7E7E7] rounded-lg focus:outline-none focus:border-[#272262]"
+                        className="w-full p-3 border border-[#E7E7E7] text-black rounded-lg focus:outline-none focus:border-[#272262]"
                       />
                     </div>
 
