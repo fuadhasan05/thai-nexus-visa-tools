@@ -325,7 +325,7 @@ export default function AdminUsers() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">User Management</h1>
             <p className="text-gray-600">Manage all users, contributors, and moderators</p>
           </div>
-          <Button onClick={exportUsers} variant="outline">
+          <Button onClick={exportUsers} variant="outline" className="text-black">
             <Download className="w-4 h-4 mr-2" />
             Export CSV
           </Button>
@@ -483,8 +483,9 @@ export default function AdminUsers() {
                   {/* Make avatar clickable to view profile */}
                   {user.profile ? (
                     <Link href={getContributorUrl(user.profile)}>
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity">
+                      <div className="w-12 h-12 rounded-full bg-linear-to-br from-blue-500 to-cyan-600 flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity">
                         {user.profile?.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img src={user.profile.avatar_url} alt={user.profile.full_name || user.full_name || user.email} className="w-full h-full rounded-full object-cover" />
                         ) : (
                           <span className="text-white font-bold">{(user.profile?.full_name || user.full_name || user.email)?.charAt(0).toUpperCase()}</span>
@@ -492,7 +493,7 @@ export default function AdminUsers() {
                       </div>
                     </Link>
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-linear-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
                       <span className="text-white font-bold">{(user.full_name || user.email)?.charAt(0).toUpperCase()}</span>
                     </div>
                   )}
@@ -644,7 +645,7 @@ export default function AdminUsers() {
 
       {/* Edit Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white text-black">
           <DialogHeader>
             <DialogTitle>Edit User Profile - {editingProfile?.email}</DialogTitle>
           </DialogHeader>

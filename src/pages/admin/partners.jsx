@@ -172,7 +172,7 @@ export default function AdminPartners() {
         <p className="text-gray-600">Manage business partners and track client connections</p>
       </GlassCard>
 
-      <Tabs defaultValue="partners" className="space-y-6">
+      <Tabs defaultValue="partners" className="space-y-6 text-gray-600">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="partners">Partners</TabsTrigger>
           <TabsTrigger value="contributors">Contributors</TabsTrigger>
