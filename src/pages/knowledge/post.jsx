@@ -1297,7 +1297,7 @@ export default function KnowledgePost() {
                     </div>
                   </Link>
 
-                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm">
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm mt-2">
                     {currentUser && (
                       <button
                         onClick={() => upvotePostMutation.mutate()}
