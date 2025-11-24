@@ -101,15 +101,21 @@ export default function Settings() {
 
     setUploadingImage(true);
     try {
-      // Upload to Supabase Storage. Uses existing bucket naming convention seen elsewhere in the repo.
-      const filename = `public/${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+      // Upload to Supabase Storage
+      const bucketName = 'avatars';
+      const filename = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
       const { error: uploadError } = await supabase.storage
-        .from('base44-prod')
+        .from(bucketName)
         .upload(filename, file, { cacheControl: '3600', upsert: false });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        if (uploadError.message?.includes('Bucket not found')) {
+          throw new Error('Storage bucket not configured. Please contact administrator.');
+        }
+        throw uploadError;
+      }
 
-      const { data: urlData } = supabase.storage.from('base44-prod').getPublicUrl(filename);
+      const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(filename);
       const publicUrl = urlData?.publicUrl ?? '';
 
       setFormData({ ...formData, avatar_url: publicUrl });
