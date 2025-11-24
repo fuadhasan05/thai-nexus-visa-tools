@@ -1560,7 +1560,7 @@ export default function KnowledgePost() {
                       </Button>
                     )}
 
-                    {currentUser && (
+                    {canContribute && (
                       <Link href={createPageUrl('KnowledgePost') + '?new=true'}>
                         <Button variant="outline" size="sm" className="border-green-600 text-green-600 hover:bg-green-50">
                           <BookOpen className="w-4 h-4 mr-2" />

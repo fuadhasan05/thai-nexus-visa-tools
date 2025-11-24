@@ -203,14 +203,43 @@ export default function BecomeContributor() {
           
           <Button
             onClick={async () => {
-              // Subscription flow previously used a backend function (base44.functions).
-              // Replace this with your server-side subscription endpoint (e.g. /api/create-subscription)
-              // For now show a helpful error and a contact fallback.
-              addError('Subscription flow is not configured. Please contact contact@thainexus.co.th to arrange subscription.');
+              try {
+                // Create Stripe checkout session
+                if (!existingProfile?.id) {
+                  addError('Please apply first before subscribing.');
+                  return;
+                }
+
+                const response = await fetch('/api/create-checkout-session', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    userEmail: effectiveUser.email,
+                    profileId: existingProfile.id,
+                  }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                  throw new Error(data.error || 'Failed to create checkout session');
+                }
+
+                // Redirect to Stripe Checkout
+                if (data.url) {
+                  window.location.href = data.url;
+                } else {
+                  throw new Error('No checkout URL returned');
+                }
+              } catch (error) {
+                addError(error.message || 'Failed to start subscription process');
+              }
             }}
             className="bg-[#BF1E2E] hover:bg-[#9d1825] text-white px-8 py-6 text-lg"
           >
-            Subscribe & Start Contributing
+            Subscribe Now - $29/month
           </Button>
         </GlassCard>
       </div>
