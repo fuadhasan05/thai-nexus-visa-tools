@@ -34,16 +34,16 @@ export const createPageUrl = (pageName: string) => {
     signup: '/signup',
 
     // Admin pages
-    adminmanager: '/admin',
-    adminknowledge: '/admin/knowledge',
-    adminknowledgeedit: '/admin/knowledge-edit',
-    adminbugs: '/admin/bugs',
-    adminseo: '/admin/seo',
-    adminusers: '/admin/users',
-    adminpartners: '/admin/partners',
-    adminpricing: '/admin/pricing',
-    admintranslations: '/admin/translations',
-    admincontent: '/admin/content',
+    adminmanager: '/adminmanager',
+    adminknowledge: '/adminmanager/knowledge',
+    adminknowledgeedit: '/adminmanager/knowledge-edit',
+    adminbugs: '/adminmanager/bugs',
+    adminseo: '/adminmanager/seo',
+    adminusers: '/adminmanager/users',
+    adminpartners: '/adminmanager/partners',
+    adminpricing: '/adminmanager/pricing',
+    admintranslations: '/adminmanager/translations',
+    admincontent: '/adminmanager/content',
   };
 
   return pageMap[key as keyof typeof pageMap] || '';

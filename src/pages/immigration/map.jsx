@@ -1,16 +1,25 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import immigrationOffices from '@/data/immigrationOffices';
 import { useQuery } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
-const ClientOnlyMap = dynamic(() => import('@/components/ClientOnlyMap'), { ssr: false });
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MapPin, Navigation, Phone, Clock, Info, Search, Star, Crosshair, NavigationOff, Loader2, AlertCircle, ExternalLink, ChevronDown, ChevronUp, X, ArrowRight, ArrowLeft, ArrowUp, TrendingUp } from 'lucide-react';
+import { MapPin, Navigation, Phone, Clock, Info, Search, Star, Crosshair, Loader2, AlertCircle, ExternalLink, ChevronDown, ChevronUp, X, ArrowRight, ArrowLeft, ArrowUp, TrendingUp } from 'lucide-react';
 import GlassCard from '../../components/GlassCard';
 import ContactCTA from '../../components/ContactCTA';
 import SEOHead from '../../components/SEOHead';
 const ImmigrationMapClient = dynamic(() => import('@/components/ImmigrationMapClient'), { ssr: false });
+
+const createFallbackResult = (source) => ({
+  offices: immigrationOffices.map((office) => ({
+    ...office,
+    services: Array.isArray(office.services) ? [...office.services] : [],
+    tips: Array.isArray(office.tips) ? [...office.tips] : []
+  })),
+  source
+});
 
 // ImmigrationMapClient handles all client-only Leaflet/react-leaflet rendering
 
@@ -57,12 +66,80 @@ export default function ImmigrationMap() {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [isMapMovedByUser, setIsMapMovedByUser] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
+  const [initialFallbackDataset] = useState(() => createFallbackResult('static-initial'));
 
-  const { data: offices = [], isLoading } = useQuery({
+  const fetchImmigrationOffices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('immigration_offices')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('No immigration offices found in Supabase, using static fallback dataset.');
+        return createFallbackResult('static-empty');
+      }
+
+      const formatted = data.reduce((acc, office) => {
+        const latitude = Number(office.latitude);
+        const longitude = Number(office.longitude);
+
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+          const identifier = office.name || office.slug || office.id || 'unknown office';
+          console.warn(`Skipping immigration office without valid coordinates: ${identifier}`);
+          return acc;
+        }
+
+        acc.push({
+          ...office,
+          id: office.id || office.slug || `${office.name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          latitude,
+          longitude,
+          services: Array.isArray(office.services) ? [...office.services] : [],
+          tips: Array.isArray(office.tips) ? [...office.tips] : [],
+        });
+        return acc;
+      }, []);
+
+      if (formatted.length === 0) {
+        console.warn('Supabase immigration_offices records found but none had valid coordinates; using static fallback dataset.');
+        return createFallbackResult('static-missing-coords');
+      }
+
+      return {
+        offices: formatted,
+        source: 'supabase'
+      };
+    } catch (error) {
+      console.warn('Unable to load immigration offices from Supabase, falling back to static dataset.', error);
+      return createFallbackResult('static-error');
+    }
+  };
+
+  const { data: officeDataset = initialFallbackDataset, isLoading } = useQuery({
     queryKey: ['immigration-offices'],
-    queryFn: () => base44.entities.ImmigrationOffice.filter({ is_active: true }),
-    initialData: []
+    queryFn: fetchImmigrationOffices,
+    initialData: initialFallbackDataset
   });
+
+  const offices = officeDataset.offices || [];
+  const officeSource = officeDataset.source || 'static-initial';
+  const isUsingFallbackData = officeSource !== 'supabase';
+  const officeSourceLabel = officeSource === 'supabase'
+    ? 'Supabase (live)'
+    : officeSource === 'static-empty'
+    ? 'Static dataset (Supabase empty)'
+    : officeSource === 'static-error'
+    ? 'Static dataset (Supabase unavailable)'
+    : officeSource === 'static-missing-coords'
+    ? 'Static dataset (Supabase missing coordinates)'
+    : 'Static dataset';
 
   // Calculate distance between two points in meters
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -808,6 +885,12 @@ export default function ImmigrationMap() {
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">Find Your Immigration Office</h1>
           <p className="text-white/90 text-lg">Turn-by-turn GPS directions to the nearest immigration office in Thailand</p>
         </div>
+      </div>
+
+      <div className="flex justify-end">
+        <span className={`text-xs font-semibold ${isUsingFallbackData ? 'text-amber-600' : 'text-emerald-600'}`}>
+          Data source: {officeSourceLabel}
+        </span>
       </div>
 
       {/* Location Controls - Updated */}

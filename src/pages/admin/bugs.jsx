@@ -430,7 +430,7 @@ export default function AdminBugs() {
               <Input
                 name="affected_page"
                 defaultValue={editingBug?.affected_page || ''}
-                placeholder="e.g., /admin/bugs, Home page"
+                placeholder="e.g., /adminmanager/bugs, Home page"
               />
             </div>
 

@@ -6,6 +6,23 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/adminmanager/:path*',
+        destination: '/admin/:path*',
+      },
+    ];
+  },
+  async redirects() {
+    return [
+      {
+        source: '/admin/:path*',
+        destination: '/adminmanager/:path*',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
